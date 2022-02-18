@@ -24,8 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-#        os: [ubuntu-18.04, macos-10.15, windows-2019]
-        os: [macos-10.15]
+        os: [ubuntu-18.04, macos-10.15, windows-2019]
         # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
         target_cpu: ["x86-64"]
         # https://github.com/zkcrypto/curve25519-dalek-ng/pull/14
@@ -258,11 +257,8 @@ jobs:
             echo -n "waiting... "
             sleep 10
             request_status=$(xcrun altool --notarization-info $requestUUID --username "$MACOS_NOTARIZE_USERNAME" --password "$MACOS_NOTARIZE_PASSWORD" 2>&1)
-            echo "$request_status"
             request_status=$(echo "$request_status" | awk -F ': ' '/Status:/ { print $2; }' )
-            echo "$request_status"
           done
-          echo "$request_status"
           if [[ $request_status != "success" ]]; then
             echo "## could not notarize - $request_status - ${{ env.TBN_FILENAME }}-${{ env.VERSION }}.pkg"
             exit 1
