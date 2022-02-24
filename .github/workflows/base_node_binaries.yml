@@ -25,7 +25,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-18.04, macos-10.15, windows-2019]
+#        os: [ubuntu-18.04, macos-10.15, windows-2019]
+        os: [macos-10.15]
         # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
         target_cpu: ["x86-64"]
         # https://github.com/zkcrypto/curve25519-dalek-ng/pull/14
