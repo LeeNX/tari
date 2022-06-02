@@ -27,6 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         build: [ linux-x86_64, linux-arm64, macos-x86_64, macos-arm64, windows-x64 ]
+
         features: [ "safe" ]
         # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
         target_cpu: [ "x86-64" ]
@@ -38,6 +39,7 @@ jobs:
         # include:
         #   - os: "macos-10.15"
         #     target_cpu: "x86-64"
+
         include:
           - build: linux-x86_64
             os: ubuntu-18.04
@@ -224,7 +226,7 @@ jobs:
           echo "Sha: ${VSHA_SHORT}"
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "VSHA_SHORT=${VSHA_SHORT}" >> $GITHUB_ENV
-          BINFILE="${TBN_FILENAME}-${VERSION}-${VSHA_SHORT}-${{ matrix.os }}-${{ matrix.target_cpu }}${TBN_EXT}"
+          BINFILE="${TBN_FILENAME}-${VERSION}-${VSHA_SHORT}-${{ matrix.build }}${TBN_EXT}"
           echo "BINFILE=${BINFILE}" >> $GITHUB_ENV
           echo "Copying files for ${BINFILE} to $(pwd)"
           ls -la "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/"
