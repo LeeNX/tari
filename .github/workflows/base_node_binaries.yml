@@ -1,3 +1,4 @@
+---
 name: Build Matrix of Binaries
 
 on:
@@ -25,9 +26,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-18.04, macos-10.15, windows-2019]
+        build: [ linux-x86_64, linux-arm64, macos-x86_64, macos-arm64, windows-x64 ]
         # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
         target_cpu: ["x86-64"]
+        features: safe
         # https://github.com/zkcrypto/curve25519-dalek-ng/pull/14
         # target_cpu: ["haswell"]
         # exclude:
@@ -36,6 +38,34 @@ jobs:
         # include:
         #   - os: "macos-10.15"
         #     target_cpu: "x86-64"
+
+        include:
+        - build: linux-x86_64
+          os: ubuntu-18.04
+          rust: nightly-2021-11-20
+          target: x86_64-unknown-linux-gnu
+          cross: false
+          target_cpu: generic
+        - build: linux-arm64
+          os: ubuntu-latest
+          rust: stable
+          target: aarch64-unknown-linux-gnu
+          cross: true
+        - build: macos-x86_64
+          os: macos-10.15
+          rust: stable
+          target: x86_64-apple-darwin
+          cross: false
+        - build: macos-arm64
+          os: macos-latest
+          rust: stable
+          target: aarch64-apple-darwin
+          cross: true
+        - build: windows-x64
+          os: windows-latest
+          rust: stable
+          target: x86_64-pc-windows-msvc
+          cross: false
 
     runs-on: ${{ matrix.os }}
 
@@ -63,8 +93,11 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2021-11-20
-          components: rustfmt
+          profile: minimal
+          components: rustfmt, clippy
+          toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.target }}
+#          use-cross: ${{ matrix.cross }}
           override: true
 
       - name: Install Linux dependencies - Ubuntu
@@ -111,7 +144,7 @@ jobs:
         run: |
           echo "SHARUN=shasum --algorithm 256" >> $GITHUB_ENV
           echo "CC=gcc" >> $GITHUB_ENV
-          echo "TBN_EXT=" >> $GITHUB_ENV          
+          echo "TBN_EXT=" >> $GITHUB_ENV
           echo "LIB_PRE=lib" >> $GITHUB_ENV
           echo "SHELL_EXT=.sh" >> $GITHUB_ENV
           echo "PLATFORM_SPECIFIC_DIR=linux" >> $GITHUB_ENV
@@ -166,11 +199,14 @@ jobs:
           df -h
 
       - name: Build rust binaries
+        uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: "-C target_cpu=${{ matrix.target_cpu }}"
           ROARING_ARCH: "${{ matrix.target_cpu }}"
-        run: |
-          cargo build --release
+        with:
+          use-cross: ${{ matrix.cross }}
+          command: build
+          args: --release --target ${{ matrix.target }} --features ${{ matrix.features }} --locked
 
       - name: Info - Post-Compile Space Check for Nix
         if: "!startsWith(runner.os,'Windows')"
@@ -191,15 +227,15 @@ jobs:
           BINFILE="${TBN_FILENAME}-${VERSION}-${VSHA_SHORT}-${{ matrix.os }}-${{ matrix.target_cpu }}${TBN_EXT}"
           echo "BINFILE=${BINFILE}" >> $GITHUB_ENV
           echo "Copying files for ${BINFILE} to $(pwd)"
-          ls -la "$GITHUB_WORKSPACE/target/release/"
-          cp -v "$GITHUB_WORKSPACE/target/release/tari_base_node${TBN_EXT}" .
-          cp -v "$GITHUB_WORKSPACE/target/release/tari_console_wallet${TBN_EXT}" .
-          cp -v "$GITHUB_WORKSPACE/target/release/tari_merge_mining_proxy${TBN_EXT}" .
-          cp -v "$GITHUB_WORKSPACE/target/release/tari_miner${TBN_EXT}" .
-          cp -v "$GITHUB_WORKSPACE/target/release/tari_validator_node${TBN_EXT}" .
-          cp -v "$GITHUB_WORKSPACE/target/release/tari_collectibles${TBN_EXT}" .
-          cp -v "$GITHUB_WORKSPACE/target/release/tari_launchpad${TBN_EXT}" .
-          cp -v "$GITHUB_WORKSPACE/target/release/${LIB_PRE}tari_mining_helper_ffi${LIB_EXT}" .
+          ls -la "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/"
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/tari_base_node${TBN_EXT}" .
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/tari_console_wallet${TBN_EXT}" .
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/tari_merge_mining_proxy${TBN_EXT}" .
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/tari_miner${TBN_EXT}" .
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/tari_validator_node${TBN_EXT}" .
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/tari_collectibles${TBN_EXT}" .
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/tari_launchpad${TBN_EXT}" .
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/${LIB_PRE}tari_mining_helper_ffi${LIB_EXT}" .
           cp -v "$GITHUB_WORKSPACE/applications/tari_base_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" .
 
       - name: Build the macOS pkg
@@ -333,13 +369,13 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           #name: ${{ env.TBN_FILENAME }}-${{ env.VERSION }}-${{ env.VSHA_SHORT }}-${{ matrix.os }}-${{ matrix.target_cpu }}-${{ matrix.features }}
-          name: ${{ env.TBN_FILENAME }}_archive-${{ matrix.os }}-${{ matrix.target_cpu }}
+          name: ${{ env.TBN_FILENAME }}_archive-${{ matrix.build }}
           path: "${{ github.workspace }}${{ env.TBN_DIST }}/${{ env.BINFILE }}.zip*"
 
       - name: Artifact upload for Miner
         uses: actions/upload-artifact@v2
         with:
-          name: tari_miner-${{ matrix.os }}-${{ matrix.target_cpu }}
+          name: tari_miner-${{ matrix.build }}
           path: "${{ github.workspace }}${{ env.TBN_DIST }}/tari_miner${{ env.TBN_EXT}}"
 
       - name: Sync dist to S3 - Bash
