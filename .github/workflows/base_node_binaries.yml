@@ -213,7 +213,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --release --target ${{ matrix.target }} --features ${{ matrix.features }} --locked
+          args: --release --target ${{ matrix.target }} --features ${{ matrix.features }}
 
       - name: Info - Post-Compile Space Check for Nix
         if: "!startsWith(runner.os,'Windows')"
