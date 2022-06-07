@@ -27,7 +27,12 @@ jobs:
       fail-fast: false
       # https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs#expanding-or-adding-matrix-configurations
       matrix:
-        build: [linux-x86_64, linux-arm64, macos-x86_64, macos-arm64, windows-x64]
+        build:
+          [
+            linux-x86_64, linux-arm64,
+            macos-x86_64, macos-arm64,
+            windows-x64, windows-arm64,
+          ]
 
         # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
         # target_cpu: [ "x86-64" ]
@@ -41,7 +46,7 @@ jobs:
         #     target_cpu: "x86-64"
 
         include:
-         # - target_cpu: x86-64
+          # - target_cpu: x86-64
           - features: safe
           - build: linux-x86_64
             os: ubuntu-18.04
@@ -56,7 +61,7 @@ jobs:
             cross: true
             target_cpu: generic
           - build: macos-x86_64
-            #os: macos-10.15
+            # os: macos-10.15
             os: macos-11
             rust: stable
             target: x86_64-apple-darwin
@@ -74,6 +79,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             cross: false
             target_cpu: x86-64
+          - build: windows-arm64
+            os: windows-latest
+            rust: stable
+            target: windows_aarch64_msvc
+            cross: false
+            target_cpu: generic
 
     runs-on: ${{ matrix.os }}
 
