@@ -149,9 +149,7 @@ jobs:
             libappindicator3-dev \
             patchelf \
             librsvg2-dev \
-            # GNU C compiler for the arm64 architecture
             gcc-aarch64-linux-gnu \
-            # GNU C++ compiler
             g++-aarch64-linux-gnu
 
 
