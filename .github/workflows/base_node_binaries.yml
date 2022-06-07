@@ -58,7 +58,7 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
-            cross: true
+            cross: false
             target_cpu: generic
           - build: macos-x86_64
             # os: macos-10.15
@@ -82,7 +82,7 @@ jobs:
           - build: windows-arm64
             os: windows-latest
             rust: stable
-            target: windows_aarch64_msvc
+            target: aarch64-pc-windows-msvc
             cross: false
             target_cpu: generic
 
@@ -90,7 +90,9 @@ jobs:
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
 
       - name: Declare Global Variables 4 GHA ${{ github.event_name }}
         id: vars
