@@ -9,11 +9,11 @@ ARG BUILDPLATFORM
 ARG VERSION=1.0.1
 
 # https://pkgs.alpinelinux.org/packages?name=tor&branch=v3.16&repo=community
-ARG TOR_VERSION=0.4.7.7-r1
+ARG TOR_VERSION=0.4.7.8-r0
 
 RUN apk update \
  && apk upgrade \
- && apk add grep curl tor=$TOR_VERSION \
+ && apk add grep curl tor>$TOR_VERSION \
  && rm /var/cache/apk/*
 
 ENV dockerfile_version=$VERSION
