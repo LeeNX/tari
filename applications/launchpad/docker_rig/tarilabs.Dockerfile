@@ -1,4 +1,5 @@
 # syntax = docker/dockerfile:1.3
+# Cross-compile in docker
 FROM --platform=$BUILDPLATFORM rust:1.60-bullseye as builder
 
 # Declare to make available
@@ -38,6 +39,8 @@ ARG FEATURES=safe
 ENV RUSTFLAGS="-C target_cpu=$ARCH"
 ENV ROARING_ARCH=$ARCH
 ENV CARGO_HTTP_MULTIPLEXING=false
+
+ARG VERSION=1.0.1
 
 ARG APP_NAME=wallet
 ARG APP_EXEC=tari_console_wallet
@@ -85,9 +88,8 @@ RUN --mount=type=cache,id=rust-git-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sha
       export RUSTFLAGS="-C target_cpu=generic" && \
       export ROARING_ARCH=generic ; \
     fi && \
-    cargo update && \
     cargo build ${RUST_TARGET} \
-      --bin ${APP_EXEC} --release --features $FEATURES --locked && \
+      --bin ${APP_EXEC} --release --features ${FEATURES} --locked && \
     # Copy executable out of the cache so it is available in the runtime image.
     cp -v /tari/target/${BUILD_TARGET}release/${APP_EXEC} /tari/${APP_EXEC}
 
@@ -99,7 +101,7 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
 
-ARG VERSION=1.0.1
+ARG VERSION
 
 ARG APP_NAME
 ARG APP_EXEC
@@ -129,8 +131,8 @@ RUN groupadd -g 1000 tari && useradd -s /bin/bash -u 1000 -g 1000 tari
 
 ENV dockerfile_version=$VERSION
 ENV dockerfile_build_arch=$BUILDPLATFORM
-ENV APP_NAME=${APP_NAME:-wallet}
-ENV APP_EXEC=${APP_EXEC:-tari_console_wallet}
+ENV APP_NAME=$APP_NAME
+ENV APP_EXEC=$APP_EXEC
 
 RUN mkdir -p "/var/tari/${APP_NAME}" && \
     chown -R tari.tari "/var/tari/${APP_NAME}"
@@ -147,8 +149,8 @@ RUN if [ "${APP_NAME}" = "base_node" ] ; then \
 
 USER tari
 
-COPY --from=builder /tari/$APP_EXEC /usr/bin/
-COPY applications/launchpad/docker_rig/start_tari_app.sh /usr/bin/start_tari_app.sh
+COPY --from=builder /tari/$APP_EXEC /usr/local/bin/
+COPY applications/launchpad/docker_rig/start_tari_app.sh /usr/local/bin/start_tari_app.sh
 
 ENTRYPOINT [ "start_tari_app.sh", "-c", "/var/tari/config/config.toml", "-b", "/var/tari/${APP_NAME}" ]
 # CMD [ "--non-interactive-mode" ]
