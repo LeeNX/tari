@@ -46,10 +46,10 @@ ARG VERSION=1.0.1
 ARG APP_NAME=wallet
 ARG APP_EXEC=tari_console_wallet
 
-# GNU C compiler for the arm64 architecture and GNU C++ compiler
-#RUN if [[ "${TARGETPLATFORM}" == "linux/arm64" ]] ; then \
-RUN if [ "${TARGETARCH}" = "arm64" ] ; then \
-      # ARM64 compiler and toolchain
+# Cross-compile check for ARM64 on AMD64 and prepare build environment
+RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "${TARGETARCH}" ] ; then \
+      # Cross-compile ARM64 - compiler and toolchain
+      # GNU C compiler for the arm64 architecture and GNU C++ compiler
       echo "Setup ARM64" && \
       apt update && \
       apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && \
@@ -78,7 +78,7 @@ RUN --mount=type=cache,id=rust-git-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sha
     --mount=type=cache,id=rust-local-registry-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sharing=locked,target=/usr/local/cargo/registry \
     --mount=type=cache,id=rust-src-target-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sharing=locked,target=/home/rust/src/target \
     --mount=type=cache,id=rust-target-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sharing=locked,target=/tari/target \
-    if [ "${TARGETARCH}" = "arm64" ] ; then \
+    if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "${TARGETARCH}" ] ; then \
       # Hardcode ARM64 envs for cross-compiling
       export BUILD_TARGET="aarch64-unknown-linux-gnu/" && \
       export RUST_TARGET="--target=aarch64-unknown-linux-gnu" && \
@@ -130,7 +130,8 @@ RUN --mount=type=cache,id=runtime-apt-cache-${TARGETOS}-${TARGETARCH}${TARGETVAR
   openssl \
   telnet
 
-RUN groupadd -g 1000 tari && useradd -s /bin/bash -u 1000 -g 1000 tari
+RUN groupadd -g 1000 tari && \
+    useradd -s /bin/bash -u 1000 -g 1000 tari
 
 ENV dockerfile_version=$VERSION
 ENV dockerfile_build_arch=$BUILDPLATFORM
@@ -152,9 +153,10 @@ RUN if [ "${APP_NAME}" = "base_node" ] ; then \
 
 USER tari
 
-COPY --from=builder /tari/${APP_EXEC} /usr/bin/
-COPY applications/launchpad/docker_rig/start_tari_app.sh /usr/bin/start_tari_app.sh
+COPY --chown=tari:tari --from=builder /tari/${APP_EXEC} /usr/local/bin/
+COPY --chown=tari:tari applications/launchpad/docker_rig/start_tari_app.sh /usr/local/bin/start_tari_app.sh
 
 # Switch to shell for env substitute
 ENTRYPOINT start_tari_app.sh -c /var/tari/config/config.toml -b /var/tari/${APP_NAME}
 # CMD [ "--non-interactive-mode" ]
+CMD
