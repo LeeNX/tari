@@ -1,8 +1,8 @@
 # Package build
 
+# could be latest
 ARG ALPINE_VERSION=3.16
 
-#FROM alpine:latest
 FROM alpine:$ALPINE_VERSION
 
 ARG BUILDPLATFORM

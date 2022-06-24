@@ -18,7 +18,6 @@ ARG MONERO_ARCH=x64
 ARG MONERO_TAR=x86_64
 
 # https://github.com/monero-project/monero/releases
-#ARG MONERO_VERSION=0.17.3.2
 ARG MONERO_AMD64_SHA256=1e54acd749265d9439d3733441c645d9b058316283c8f21cca2a333c1238cd16
 
 # Declare stage using linux/arm64 base image
@@ -29,7 +28,6 @@ ARG MONERO_ARCH=armv8
 ARG MONERO_TAR=aarch64
 
 # https://github.com/monero-project/monero/releases
-#ARG MONERO_VERSION=0.17.3.2
 ARG MONERO_ARM64_SHA256=8e311714e97f2ac87bfd818abd5c4c605ca19ebda84a1edea93ec00a89d07e2e
 
 # Declare TARGETARCH to make it available
@@ -94,7 +92,8 @@ EXPOSE 18081
 EXPOSE 18089
 
 # Add HEALTHCHECK against get_info endpoint
-HEALTHCHECK --interval=30s --timeout=5s CMD curl --fail http://localhost:18089/get_info || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=2 \
+            CMD curl --fail http://localhost:18089/get_info || exit 1
 
 ENTRYPOINT ["./monerod"]
 CMD ["--non-interactive", "--restricted-rpc", "--rpc-bind-ip=0.0.0.0", "--rpc-restricted-bind-port=18089", "--confirm-external-bind", "--enable-dns-blocklist", "--out-peers=16"]
