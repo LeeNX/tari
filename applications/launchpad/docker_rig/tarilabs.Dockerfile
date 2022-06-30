@@ -1,4 +1,5 @@
 # syntax = docker/dockerfile:1.3
+# rust source compile with cross platform support
 FROM --platform=$BUILDPLATFORM rust:1.60-bullseye as builder
 
 # Declare to make available
@@ -32,19 +33,23 @@ RUN --mount=type=cache,id=build-apt-cache-${BUILDOS}-${BUILDARCH}${BUILDVARIANT}
   clang \
   cmake
 
-ARG ARCH=native
+# https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+#ARG ARCH=native
+ARG ARCH=x86-64
 #ARG FEATURES=avx2
 ARG FEATURES=safe
 ENV RUSTFLAGS="-C target_cpu=$ARCH"
 ENV ROARING_ARCH=$ARCH
 ENV CARGO_HTTP_MULTIPLEXING=false
 
+ARG VERSION=1.0.1
 ARG APP_NAME=wallet
 ARG APP_EXEC=tari_console_wallet
 
-# GNU C compiler for the arm64 architecture and GNU C++ compiler
-#RUN if [[ "${TARGETPLATFORM}" == "linux/arm64" ]] ; then \
-RUN if [ "${TARGETARCH}" = "arm64" ] ; then \
+# Cross-compile check for ARM64 on AMD64 and prepare build environment
+RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "${TARGETARCH}" ] ; then \
+      # Cross-compile ARM64 - compiler and toolchain
+      # GNU C compiler for the arm64 architecture and GNU C++ compiler
       echo "Setup ARM64" && \
       apt update && \
       apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && \
@@ -73,7 +78,8 @@ RUN --mount=type=cache,id=rust-git-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sha
     --mount=type=cache,id=rust-local-registry-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sharing=locked,target=/usr/local/cargo/registry \
     --mount=type=cache,id=rust-src-target-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sharing=locked,target=/home/rust/src/target \
     --mount=type=cache,id=rust-target-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sharing=locked,target=/tari/target \
-    if [ "${TARGETARCH}" = "arm64" ] ; then \
+    if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "${TARGETARCH}" ] ; then \
+      # Hardcode ARM64 envs for cross-compiling
       export BUILD_TARGET="aarch64-unknown-linux-gnu/" && \
       export RUST_TARGET="--target=aarch64-unknown-linux-gnu" && \
       export ARCH=generic && \
@@ -85,9 +91,8 @@ RUN --mount=type=cache,id=rust-git-${TARGETOS}-${TARGETARCH}${TARGETVARIANT},sha
       export RUSTFLAGS="-C target_cpu=generic" && \
       export ROARING_ARCH=generic ; \
     fi && \
-    cargo update && \
     cargo build ${RUST_TARGET} \
-      --bin ${APP_EXEC} --release --features $FEATURES --locked && \
+      --bin ${APP_EXEC} --release --features ${FEATURES} --locked && \
     # Copy executable out of the cache so it is available in the runtime image.
     cp -v /tari/target/${BUILD_TARGET}release/${APP_EXEC} /tari/${APP_EXEC}
 
@@ -99,7 +104,7 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
 
-ARG VERSION=1.0.1
+ARG VERSION
 
 ARG APP_NAME
 ARG APP_EXEC
@@ -125,7 +130,8 @@ RUN --mount=type=cache,id=runtime-apt-cache-${TARGETOS}-${TARGETARCH}${TARGETVAR
   openssl \
   telnet
 
-RUN groupadd -g 1000 tari && useradd -s /bin/bash -u 1000 -g 1000 tari
+RUN groupadd -g 1000 tari && \
+    useradd -s /bin/bash -u 1000 -g 1000 tari
 
 ENV dockerfile_version=$VERSION
 ENV dockerfile_build_arch=$BUILDPLATFORM
@@ -147,8 +153,10 @@ RUN if [ "${APP_NAME}" = "base_node" ] ; then \
 
 USER tari
 
-COPY --from=builder /tari/$APP_EXEC /usr/bin/
-COPY applications/launchpad/docker_rig/start_tari_app.sh /usr/bin/start_tari_app.sh
+COPY --chown=tari:tari --from=builder /tari/${APP_EXEC} /usr/local/bin/
+COPY --chown=tari:tari applications/launchpad/docker_rig/start_tari_app.sh /usr/local/bin/start_tari_app.sh
 
-ENTRYPOINT [ "start_tari_app.sh", "-c", "/var/tari/config/config.toml", "-b", "/var/tari/${APP_NAME}" ]
+# Switch to shell for env substitute
+ENTRYPOINT start_tari_app.sh -c /var/tari/config/config.toml -b /var/tari/${APP_NAME}
 # CMD [ "--non-interactive-mode" ]
+CMD
