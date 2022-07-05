@@ -29,10 +29,11 @@ build_3dparty_image() {
   docker ${TL_TAG_BUILD_OPTS} \
     -f docker_rig/$1 \
     --build-arg VERSION="${TL_VERSION}" \
-    --build-arg ${2^^}_VERSION=${SUBTAG}${SUBTAG_EXTRA} \
+    --build-arg ${2^^}_VERSION=${SUBTAG} \
     $4 $5 $6 $7 $8 $9 \
     -t ${TL_TAG_URL}/$2:${SUBTAG}${SUBTAG_EXTRA} $3 ${TL_TAG_BUILD_Extra}
 }
+
 
 build_tari_image() {
 # $1 image name
@@ -51,6 +52,35 @@ build_tari_image() {
     --build-arg APP_EXEC=$5 \
     $6 $7 $8 $9 \
     -t ${TL_TAG_URL}/$1:$2 $3 ${TL_TAG_BUILD_Extra}
+}
+
+build_all_3dparty_images() {
+  # 5min package build
+  build_3dparty_image tor.Dockerfile tor .
+
+  # 15min binary build
+  build_3dparty_image monerod.Dockerfile monerod .
+
+  # 45min source build
+  build_3dparty_image xmrig.Dockerfile xmrig .
+}
+
+build_all_tari_images() {
+  for element in "${arrTari[@]}"; do
+    echo $element
+    export $(jq --arg jsonVar "$element" -r '. [] | select(."image_name"==$jsonVar)
+      | to_entries[] | .key + "=" + (.value | @sh)' tarisuite.json)
+    echo $image_name, $app_name, $app_exec
+    build_tari_image $image_name \
+      "$TL_VERSION_LONG" ./../.. \
+      $app_name $app_exec
+
+  done
+}
+
+build_all_images() {
+  build_all_3dparty_images
+  build_all_tari_images
 }
 
 # Quick overrides
@@ -80,27 +110,29 @@ TL_VERSION_LONG=${TL_VERSION_LONG:-"${TL_VERSION}${TL_TAG_BUILD_PF}"}
 # Sub Tag extra
 #SUBTAG_EXTRA=${SUBTAG_EXTRA:-"-$TL_VERSION_LONG"}
 
-# 5min package build
-build_3dparty_image tor.Dockerfile tor .
+if [ -z "${1}" ]; then
+  echo "Build all images with defaults"
+  build_all_images
+  exit 0
+fi
 
-# 15min binary build
-build_3dparty_image monerod.Dockerfile monerod .
+# toLower
+commandEnv="${1,,}"
 
-# 45min source build
-build_3dparty_image  xmrig.Dockerfile xmrig .
-
-build_tari_image tari_base_node \
-  "$TL_VERSION_LONG" ./../.. \
-  base_node tari_base_node
-
-build_tari_image tari_console_wallet \
-  "$TL_VERSION_LONG" ./../.. \
-  wallet tari_console_wallet
-
-build_tari_image tari_sha3_miner \
-  "$TL_VERSION_LONG" ./../.. \
-  sha3_miner tari_miner
-
-build_tari_image tari_mm_proxy \
-  "$TL_VERSION_LONG" ./../.. \
-  mm_proxy tari_merge_mining_proxy
+case $commandEnv in
+  -3 | 3rdparty )
+    build_all_3dparty_images
+    ;;
+  -t | tari_ )
+    build_all_tari_images
+    ;;
+  -a | all )
+    build_all_images
+    ;;
+  -h | -? | --help | help )
+    echo "help"
+    ;;
+  *) echo "Invalid input"
+    exit 1
+    ;;
+esac
