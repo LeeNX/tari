@@ -24,14 +24,14 @@ build_3dparty_image() {
     exit 1
   fi
 
-  echo "Building from $1 in $2 image version $SUBTAG ..."
+  echo "Building from $1 in $2 image version ${SUBTAG}${SUBTAG_EXTRA} ..."
 
   docker ${TL_TAG_BUILD_OPTS} \
     -f docker_rig/$1 \
     --build-arg VERSION="${TL_VERSION}" \
-    --build-arg ${2^^}_VERSION=${SUBTAG} \
+    --build-arg ${2^^}_VERSION=${SUBTAG}${SUBTAG_EXTRA} \
     $4 $5 $6 $7 $8 $9 \
-    -t ${TL_TAG_URL}/$2:${SUBTAG} $3 ${TL_TAG_BUILD_Extra}
+    -t ${TL_TAG_URL}/$2:${SUBTAG}${SUBTAG_EXTRA} $3 ${TL_TAG_BUILD_Extra}
 }
 
 build_tari_image() {
@@ -53,6 +53,11 @@ build_tari_image() {
     -t ${TL_TAG_URL}/$1:$2 $3 ${TL_TAG_BUILD_Extra}
 }
 
+# Quick overrides
+if [ -f ".env.local" ]; then
+  source ".env.local"
+fi
+
 #TL_TAG_BUILD_PF=amd64
 
 # Version refers to the base_node, wallet, etc.
@@ -64,10 +69,16 @@ TBN_ARCH=${TBN_ARCH:-x86-64}
 TBN_FEATURES=${TBN_FEATURES:-safe}
 
 # Docker tag URL
-TL_TAG_URL=${TL_TAG_URL:-local/tarilabs}
+TL_TAG_URL=${TL_TAG_URL:-quay.io/tarilabs}
 
 # Docker build options
 TL_TAG_BUILD_OPTS=${TL_TAG_BUILD_OPTS:-"build"}
+
+#TL_VERSION_LONG="${TL_VERSION}-${TBN_ARCH}-${TBN_FEATURES}"
+TL_VERSION_LONG=${TL_VERSION_LONG:-"${TL_VERSION}${TL_TAG_BUILD_PF}"}
+
+# Sub Tag extra
+#SUBTAG_EXTRA=${SUBTAG_EXTRA:-"-$TL_VERSION_LONG"}
 
 # 5min package build
 build_3dparty_image tor.Dockerfile tor .
@@ -77,9 +88,6 @@ build_3dparty_image monerod.Dockerfile monerod .
 
 # 45min source build
 build_3dparty_image  xmrig.Dockerfile xmrig .
-
-#TL_VERSION_LONG="${TL_VERSION}-${TBN_ARCH}-${TBN_FEATURES}"
-TL_VERSION_LONG=${TL_VERSION_LONG:-"${TL_VERSION}${TL_TAG_BUILD_PF}"}
 
 build_tari_image tari_base_node \
   "$TL_VERSION_LONG" ./../.. \

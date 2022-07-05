@@ -14,3 +14,13 @@ export TBN_FEATURES=safe
 export TL_TAG_URL=quay.io/tarilabs
 
 export TL_TAG_BUILD_OPTS="buildx build --platform linux/amd64,linux/arm64 --push"
+
+# Pull App version from file
+VAPP=$(awk -F ' = ' \
+    '$1 ~ /version/ { gsub(/["]/, "", $2); printf("%s",$2) }' \
+    "../tari_base_node/Cargo.toml")
+
+VBRANCH=$(git branch --show-current)
+VSHA_SHORT=$(git rev-parse --short HEAD)
+
+export SUBTAG_EXTRA="_v${VAPP}_${VBRANCH}_$(date -u '+%Y%m%d')_${VSHA_SHORT}"
