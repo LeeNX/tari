@@ -1,5 +1,5 @@
-#!/bin/bash
-#
+#!/usr/bin/env bash
+# Build docker images script, with options
 #
 #
 
@@ -55,26 +55,18 @@ build_tari_image() {
 }
 
 build_all_3dparty_images() {
-  # 5min package build
-  build_3dparty_image tor.Dockerfile tor .
-
-  # 15min binary build
-  build_3dparty_image monerod.Dockerfile monerod .
-
-  # 45min source build
-  build_3dparty_image xmrig.Dockerfile xmrig .
+  for element in "${arr3rdParty[@]}"; do
+    build_3dparty_image $element.Dockerfile $element .
+  done
 }
 
 build_all_tari_images() {
-  for element in "${arrTari[@]}"; do
-    echo $element
+  for element in "${arrTariSuite[@]}"; do
     export $(jq --arg jsonVar "$element" -r '. [] | select(."image_name"==$jsonVar)
       | to_entries[] | .key + "=" + (.value | @sh)' tarisuite.json)
-    echo $image_name, $app_name, $app_exec
     build_tari_image $image_name \
       "$TL_VERSION_LONG" ./../.. \
       $app_name $app_exec
-
   done
 }
 
@@ -110,6 +102,10 @@ TL_VERSION_LONG=${TL_VERSION_LONG:-"${TL_VERSION}${TL_TAG_BUILD_PF}"}
 # Sub Tag extra
 #SUBTAG_EXTRA=${SUBTAG_EXTRA:-"-$TL_VERSION_LONG"}
 
+arrAllTools=(  $(jq -r '.[].image_name' tarisuite.json 3rdparty.json) )
+arrTariSuite=( $(jq -r '.[].image_name' tarisuite.json) )
+arr3rdParty=(  $(jq -r '.[].image_name' 3rdparty.json) )
+
 if [ -z "${1}" ]; then
   echo "Build all images with defaults"
   build_all_images
@@ -129,6 +125,11 @@ case $commandEnv in
   -a | all )
     build_all_images
     ;;
+  -r | requirement | requirements )
+    echo "List of requirements and possible test"
+    jqVersion=$(jq --version)
+    echo "jq is new - ${jqVersion}"
+    ;;
   -h | -? | --help | help )
     echo "help"
     ;;
@@ -136,3 +137,5 @@ case $commandEnv in
     exit 1
     ;;
 esac
+
+exit 0
