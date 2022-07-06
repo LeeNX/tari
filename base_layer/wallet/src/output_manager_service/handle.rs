@@ -109,6 +109,9 @@ pub enum OutputManagerRequest {
     ValidateUtxos,
     RevalidateTxos,
     CreateCoinSplit((Vec<Commitment>, MicroTari, usize, MicroTari)),
+    CreateCoinSplitEven((Vec<Commitment>, usize, MicroTari)),
+    PreviewCoinJoin((Vec<Commitment>, MicroTari)),
+    PreviewCoinSplitEven((Vec<Commitment>, usize, MicroTari)),
     CreateCoinJoin {
         commitments: Vec<Commitment>,
         fee_per_gram: MicroTari,
@@ -176,7 +179,18 @@ impl fmt::Display for OutputManagerRequest {
             GetInvalidOutputs => write!(f, "GetInvalidOutputs"),
             ValidateUtxos => write!(f, "ValidateUtxos"),
             RevalidateTxos => write!(f, "RevalidateTxos"),
+            PreviewCoinJoin((commitments, fee_per_gram)) => write!(
+                f,
+                "PreviewCoinJoin(commitments={:#?}, fee_per_gram={})",
+                commitments, fee_per_gram
+            ),
+            PreviewCoinSplitEven((commitments, number_of_splits, fee_per_gram)) => write!(
+                f,
+                "PreviewCoinSplitEven(commitments={:#?}, number_of_splits={}, fee_per_gram={})",
+                commitments, number_of_splits, fee_per_gram
+            ),
             CreateCoinSplit(v) => write!(f, "CreateCoinSplit ({:?})", v.0),
+            CreateCoinSplitEven(v) => write!(f, "CreateCoinSplitEven ({:?})", v.0),
             CreateCoinJoin {
                 commitments,
                 fee_per_gram,
@@ -270,6 +284,7 @@ pub enum OutputManagerResponse {
     CoinbaseAbandonedSet,
     ClaimHtlcTransaction((TxId, MicroTari, MicroTari, Transaction)),
     OutputStatusesByTxId(OutputStatusesByTxId),
+    CoinPreview((Vec<MicroTari>, MicroTari)),
 }
 
 pub type OutputManagerEventSender = broadcast::Sender<Arc<OutputManagerEvent>>;
@@ -671,6 +686,41 @@ impl OutputManagerHandle {
         }
     }
 
+    pub async fn preview_coin_join_with_commitments(
+        &mut self,
+        commitments: Vec<Commitment>,
+        fee_per_gram: MicroTari,
+    ) -> Result<(Vec<MicroTari>, MicroTari), OutputManagerError> {
+        match self
+            .handle
+            .call(OutputManagerRequest::PreviewCoinJoin((commitments, fee_per_gram)))
+            .await??
+        {
+            OutputManagerResponse::CoinPreview((expected_outputs, fee)) => Ok((expected_outputs, fee)),
+            _ => Err(OutputManagerError::UnexpectedApiResponse),
+        }
+    }
+
+    pub async fn preview_coin_split_with_commitments_no_amount(
+        &mut self,
+        commitments: Vec<Commitment>,
+        split_count: usize,
+        fee_per_gram: MicroTari,
+    ) -> Result<(Vec<MicroTari>, MicroTari), OutputManagerError> {
+        match self
+            .handle
+            .call(OutputManagerRequest::PreviewCoinSplitEven((
+                commitments,
+                split_count,
+                fee_per_gram,
+            )))
+            .await??
+        {
+            OutputManagerResponse::CoinPreview((expected_outputs, fee)) => Ok((expected_outputs, fee)),
+            _ => Err(OutputManagerError::UnexpectedApiResponse),
+        }
+    }
+
     /// Create a coin split transaction.
     /// Returns (tx_id, tx, utxos_total_value).
     pub async fn create_coin_split(
@@ -685,6 +735,26 @@ impl OutputManagerHandle {
             .call(OutputManagerRequest::CreateCoinSplit((
                 commitments,
                 amount_per_split,
+                split_count,
+                fee_per_gram,
+            )))
+            .await??
+        {
+            OutputManagerResponse::Transaction(ct) => Ok(ct),
+            _ => Err(OutputManagerError::UnexpectedApiResponse),
+        }
+    }
+
+    pub async fn create_coin_split_even(
+        &mut self,
+        commitments: Vec<Commitment>,
+        split_count: usize,
+        fee_per_gram: MicroTari,
+    ) -> Result<(TxId, Transaction, MicroTari), OutputManagerError> {
+        match self
+            .handle
+            .call(OutputManagerRequest::CreateCoinSplitEven((
+                commitments,
                 split_count,
                 fee_per_gram,
             )))

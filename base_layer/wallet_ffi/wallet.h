@@ -14,9 +14,10 @@
 #define OutputFields_NUM_FIELDS 10
 
 enum TariTypeTag {
-  String = 0,
+  Text = 0,
   Utxo = 1,
   Commitment = 2,
+  MicroTari = 3,
 };
 
 enum TariUtxoSort {
@@ -163,6 +164,21 @@ struct TransactionSendStatus;
 
 struct TransportConfig;
 
+/**
+ * -------------------------------- Vector ------------------------------------------------ ///
+ */
+struct TariVector {
+  enum TariTypeTag tag;
+  uintptr_t len;
+  uintptr_t cap;
+  void *ptr;
+};
+
+struct TariCoinPreview {
+  struct TariVector *expected_outputs;
+  uint64_t fee;
+};
+
 typedef struct TransactionKernel TariTransactionKernel;
 
 /**
@@ -288,19 +304,13 @@ struct TariUtxo {
   char *commitment;
   uint64_t value;
   uint64_t mined_height;
+  uint8_t status;
 };
 
 struct TariOutputs {
   uintptr_t len;
   uintptr_t cap;
   struct TariUtxo *ptr;
-};
-
-struct TariVector {
-  enum TariTypeTag tag;
-  uintptr_t len;
-  uintptr_t cap;
-  void *ptr;
 };
 
 typedef struct FeePerGramStatsResponse TariFeePerGramStats;
@@ -310,6 +320,62 @@ typedef struct FeePerGramStat TariFeePerGramStat;
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * Initialize a new `TariVector`
+ *
+ * ## Arguments
+ * `tag` - A predefined type-tag of the vector's payload.
+ *
+ * ## Returns
+ * `*mut TariVector` - Returns a pointer to a `TariVector`.
+ *
+ * # Safety
+ * `destroy_tari_vector()` must be called to free the allocated memory.
+ */
+struct TariVector *create_tari_vector(enum TariTypeTag tag);
+
+/**
+ * Appending a given value to the back of the vector.
+ *
+ * ## Arguments
+ * `s` - An item to push.
+ *
+ * ## Returns
+ *
+ *
+ * # Safety
+ * `destroy_tari_vector()` must be called to free the allocated memory.
+ */
+void tari_vector_push_string(struct TariVector *tv, const char *s, int32_t *error_ptr);
+
+/**
+ * Frees memory allocated for `TariVector`.
+ *
+ * ## Arguments
+ * `v` - The pointer to `TariVector`
+ *
+ * ## Returns
+ * `()` - Does not return a value, equivalent to void in C
+ *
+ * # Safety
+ * None
+ */
+void destroy_tari_vector(struct TariVector *v);
+
+/**
+ * Frees memory allocated for `TariCoinPreview`.
+ *
+ * ## Arguments
+ * `v` - The pointer to `TariCoinPreview`
+ *
+ * ## Returns
+ * `()` - Does not return a value, equivalent to void in C
+ *
+ * # Safety
+ * None
+ */
+void destroy_tari_coin_preview(struct TariCoinPreview *p);
 
 /**
  * -------------------------------- Strings ------------------------------------------------ ///
@@ -2187,14 +2253,14 @@ TariBalance *wallet_get_balance(struct TariWallet *wallet,
  * This function returns a list of unspent UTXO values and commitments.
  *
  * ## Arguments
- * `wallet` - The TariWallet pointer,
- * `page` - Page offset,
- * `page_size` - A number of items per page,
- * `sorting` - An enum representing desired sorting,
- * `dust_threshold` - A value filtering threshold. Outputs whose values are <= `dust_threshold` are not listed in the
+ * * `wallet` - The TariWallet pointer,
+ * * `page` - Page offset,
+ * * `page_size` - A number of items per page,
+ * * `sorting` - An enum representing desired sorting,
+ * * `dust_threshold` - A value filtering threshold. Outputs whose values are <= `dust_threshold` are not listed in the
  * result.
- * `error_out` - A pointer to an int which will be modified to an error
- * code should one occur, may not be null. Functions as an out parameter.
+ * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
+ * Functions as an out parameter.
  *
  * ## Returns
  * `*mut TariOutputs` - Returns a struct with an array pointer, length and capacity (needed for proper destruction
@@ -2213,6 +2279,40 @@ struct TariOutputs *wallet_get_utxos(struct TariWallet *wallet,
                                      int32_t *error_ptr);
 
 /**
+ * This function returns a list of all UTXO values, commitment's hex values and states.
+ *
+ * ## Arguments
+ * * `wallet` - The TariWallet pointer,
+ * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
+ * Functions as an out parameter.
+ *
+ * ## Returns
+ * `*mut TariOutputs` - Returns a struct with an array pointer, length and capacity (needed for proper destruction
+ * after use).
+ *
+ * ## States
+ * 0 - Unspent
+ * 1 - Spent
+ * 2 - EncumberedToBeReceived
+ * 3 - EncumberedToBeSpent
+ * 4 - Invalid
+ * 5 - CancelledInbound
+ * 6 - UnspentMinedUnconfirmed
+ * 7 - ShortTermEncumberedToBeReceived
+ * 8 - ShortTermEncumberedToBeSpent
+ * 9 - SpentMinedUnconfirmed
+ * 10 - AbandonedCoinbase
+ * 11 - NotStored
+ *
+ * # Safety
+ * `destroy_tari_outputs()` must be called after use.
+ * Items that fail to produce `.as_transaction_output()` are omitted from the list and a `warn!()` message is logged to
+ * LOG_TARGET.
+ */
+struct TariOutputs *wallet_get_all_utxos(struct TariWallet *wallet,
+                                         int32_t *error_ptr);
+
+/**
  * Frees memory for a `TariOutputs`
  *
  * ## Arguments
@@ -2227,32 +2327,16 @@ struct TariOutputs *wallet_get_utxos(struct TariWallet *wallet,
 void destroy_tari_outputs(struct TariOutputs *x);
 
 /**
- * Frees memory for a `TariVector`
- *
- * ## Arguments
- * `x` - The pointer to `TariVector`
- *
- * ## Returns
- * `()` - Does not return a value, equivalent to void in C
- *
- * # Safety
- * None
- */
-void destroy_tari_vector(struct TariVector *x);
-
-/**
  * This function will tell the wallet to do a coin split.
  *
  * ## Arguments
  * * `wallet` - The TariWallet pointer
  * * `commitments` - A `TariVector` of "strings", tagged as `TariTypeTag::String`, containing commitment's hex values
  *   (see `Commitment::to_hex()`)
- * * `amount_per_split` - The amount to split
  * * `number_of_splits` - The number of times to split the amount
  * * `fee_per_gram` - The transaction fee
  * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
- *   Functions
- * as an out parameter.
+ * Functions as an out parameter.
  *
  * ## Returns
  * `c_ulonglong` - Returns the transaction id.
@@ -2262,7 +2346,6 @@ void destroy_tari_vector(struct TariVector *x);
  */
 uint64_t wallet_coin_split(struct TariWallet *wallet,
                            struct TariVector *commitments,
-                           uint64_t amount_per_split,
                            uintptr_t number_of_splits,
                            uint64_t fee_per_gram,
                            int32_t *error_ptr);
@@ -2277,11 +2360,10 @@ uint64_t wallet_coin_split(struct TariWallet *wallet,
  *   (see `Commitment::to_hex()`)
  * * `fee_per_gram` - The transaction fee
  * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
- *   Functions
- * as an out parameter.
+ * Functions as an out parameter.
  *
  * ## Returns
- * `c_ulonglong` - Returns the transaction id.
+ * `TariVector` - Returns the transaction id.
  *
  * # Safety
  * `TariVector` must be freed after use with `destroy_tari_vector()`
@@ -2290,6 +2372,52 @@ uint64_t wallet_coin_join(struct TariWallet *wallet,
                           struct TariVector *commitments,
                           uint64_t fee_per_gram,
                           int32_t *error_ptr);
+
+/**
+ * This function will tell what the outcome of a coin join would be.
+ *
+ * ## Arguments
+ * * `wallet` - The TariWallet pointer
+ * * `commitments` - A `TariVector` of "strings", tagged as `TariTypeTag::String`, containing commitment's hex values
+ *   (see `Commitment::to_hex()`)
+ * * `fee_per_gram` - The transaction fee
+ * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
+ *   Functions as an out parameter.
+ *
+ * ## Returns
+ * `*mut TariCoinPreview` - A struct with expected output values and the fee.
+ *
+ * # Safety
+ * `TariVector` must be freed after use with `destroy_tari_vector()`
+ */
+struct TariCoinPreview *wallet_preview_coin_join(struct TariWallet *wallet,
+                                                 struct TariVector *commitments,
+                                                 uint64_t fee_per_gram,
+                                                 int32_t *error_ptr);
+
+/**
+ * This function will tell what the outcome of a coin split would be.
+ *
+ * ## Arguments
+ * * `wallet` - The TariWallet pointer
+ * * `commitments` - A `TariVector` of "strings", tagged as `TariTypeTag::String`, containing commitment's hex values
+ *   (see `Commitment::to_hex()`)
+ * * `number_of_splits` - The number of times to split the amount
+ * * `fee_per_gram` - The transaction fee
+ * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
+ *   Functions as an out parameter.
+ *
+ * ## Returns
+ * `*mut TariCoinPreview` - A struct with expected output values and the fee.
+ *
+ * # Safety
+ * `TariVector` must be freed after use with `destroy_tari_vector()`
+ */
+struct TariCoinPreview *wallet_preview_coin_split(struct TariWallet *wallet,
+                                                  struct TariVector *commitments,
+                                                  uintptr_t number_of_splits,
+                                                  uint64_t fee_per_gram,
+                                                  int32_t *error_ptr);
 
 /**
  * Signs a message using the public key of the TariWallet
