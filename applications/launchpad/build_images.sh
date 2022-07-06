@@ -75,6 +75,15 @@ build_all_images() {
   build_all_tari_images
 }
 
+build_help_info() {
+  echo "$0 used to build docker images"
+  echo "USAGE: "
+  echo "  $0 < -a > or < all > or < without any options > | build all images with current default environment varibles"
+  echo "  $0 < -3 > | build 3rd Party images"
+  echo "  $0 < -t > | build Tari suite images"
+  echo "  $0 < -h > | this help info"
+}
+
 # Quick overrides
 if [ -f ".env.local" ]; then
   source ".env.local"
@@ -131,7 +140,7 @@ case $commandEnv in
     echo "jq is new - ${jqVersion}"
     ;;
   -h | -? | --help | help )
-    echo "help"
+    build_help_info
     ;;
   *) echo "Invalid input"
     exit 1
