@@ -54,19 +54,32 @@ build_tari_image() {
     -t ${TL_TAG_URL}/$1:$2 $3 ${TL_TAG_BUILD_Extra}
 }
 
+build_3dparty_image_json() {
+# $1 json image_name
+  build_3dparty_image $1.Dockerfile $1 .
+}
+
 build_all_3dparty_images() {
   for element in "${arr3rdParty[@]}"; do
-    build_3dparty_image $element.Dockerfile $element .
+    build_3dparty_image_json $element
   done
+}
+
+build_tari_image_json() {
+# $1 json image_name
+
+#  export $(jq --arg jsonVar "$1" -r '. [] | select(."image_name"==$jsonVar)
+#    | to_entries[] | .key + "=" + (.value | @sh)' tarisuite.json)
+  export $(jq --arg jsonVar "$1" -r '. [] | select(."image_name"==$jsonVar)
+    | to_entries[] | .key + "=" + .value' tarisuite.json)
+  build_tari_image $image_name \
+    "$TL_VERSION_LONG" ./../.. \
+    $app_name $app_exec
 }
 
 build_all_tari_images() {
   for element in "${arrTariSuite[@]}"; do
-    export $(jq --arg jsonVar "$element" -r '. [] | select(."image_name"==$jsonVar)
-      | to_entries[] | .key + "=" + (.value | @sh)' tarisuite.json)
-    build_tari_image $image_name \
-      "$TL_VERSION_LONG" ./../.. \
-      $app_name $app_exec
+    build_tari_image_json $element
   done
 }
 
@@ -81,7 +94,15 @@ build_help_info() {
   echo "  $0 < -a > or < all > or < without any options > | build all images with current default environment varibles"
   echo "  $0 < -3 > | build 3rd Party images"
   echo "  $0 < -t > | build Tari suite images"
+  echo "  $0 < -l > | list images that can be built"
+  echo "  $0 < -b image_name > | build an image"
   echo "  $0 < -h > | this help info"
+}
+
+build_help_images() {
+  echo "List all images that can be built:"
+  echo " ${arr3rdParty[@]}"
+  echo " ${arrTariSuite[@]}"
 }
 
 # Quick overrides
@@ -134,8 +155,28 @@ case $commandEnv in
   -a | all )
     build_all_images
     ;;
+  build | -b )
+    echo "Build a docker image"
+    shift
+    if [[ ${arrAllTools[*]} =~ (^|[[:space:]])"${1}"($|[[:space:]]) ]]; then
+      echo "Found $1"
+      if [ "${1:0:5}" == "tari_" ]; then
+        build_tari_image_json $1
+      else
+        build_3dparty_image_json $1
+      fi
+    else
+      echo "Not found $1"
+      build_help_info
+      build_help_images
+      exit 2
+    fi
+    ;;
+  -l | ls )
+    build_help_images
+    ;;
   -r | requirement | requirements )
-    echo "List of requirements and possible test"
+    echo "List of requirements and possible test:"
     jqVersion=$(jq --version)
     echo "jq is new - ${jqVersion}"
     ;;
