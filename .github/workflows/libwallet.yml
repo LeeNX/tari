@@ -23,7 +23,18 @@ env:
 
 jobs:
   android:
+    name: Build Android
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [
+          x86_64-linux-android,
+          aarch64-linux-android,
+        ]
+#          armv7-linux-androideabi
+
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
@@ -34,7 +45,7 @@ jobs:
           profile: minimal
           components: rustfmt, clippy
           toolchain: ${{ env.toolchain }}
-          target: x86_64-linux-android, aarch64-linux-android
+          target: ${{ matrix.build }}
           override: true
 
       - name: Build and package libwallet libraries
@@ -50,26 +61,24 @@ jobs:
           command: build
           args: >
             --release -p tari_wallet_ffi
-            --target=x86_64-linux-android
-            --target=aarch64-linux-android
-
-#          ./cross build --target=x86_64-linux-android -p tari_wallet_ffi --release
-#          ./cross build --target=aarch64-linux-android -p tari_wallet_ffi --release
+            --target=${{ matrix.build }}
 
       - name: Debugging
         shell: bash
         run: |
-          ls -alht target/x86_64-linux-android/release/
-          ls -alht target/aarch64-linux-android/release/
-          mkdir "$GITHUB_WORKSPACE/libwallet"
-          cp target/x86_64-linux-android/release/libtari_wallet_ffi.a "$GITHUB_WORKSPACE/libwallet/libtari_wallet_ffi.x86.a"
-          cp target/aarch64-linux-android/release/libtari_wallet_ffi.a "$GITHUB_WORKSPACE/libwallet/libtari_wallet_ffi.aarch64.a"
+          ls -alht target/${{ matrix.build }}/release/
+          mkdir -p "${{ runner.temp }}/libwallet"
+          target_temp=${{ matrix.build }}
+          # Strip -linux-android
+          target_platform=$(echo "${target_temp/-linux-android*/}")
+          echo "target_platform=${target_platform}" >> $GITHUB_ENV
+          cp -v target/${{ matrix.build }}/release/libtari_wallet_ffi.a "${{ runner.temp }}/libwallet/libtari_wallet_ffi.${target_platform}.a"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: libwallet-android
-          path: ${{ github.workspace }}/libwallet
+          name: libwallet-android-${{ env.target_platform }}
+          path: ${{ runner.temp }}/libwallet
 
   ios:
     runs-on: macos-10.15
