@@ -109,7 +109,8 @@ jobs:
     steps:
       - name: Download binaries
         uses: actions/download-artifact@v3
-        path: libwallet
+        with:
+          path: libwallet
 
       - name: Debugging
         shell: bash
