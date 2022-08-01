@@ -32,6 +32,8 @@ jobs:
           aarch64-linux-android,
         ]
 #          armv7-linux-androideabi
+          # todo: once determined if this 32bit arm build is still required
+          # then make necessary changes to tari comms (metrics fully optional)
 
     runs-on: ubuntu-latest
 
@@ -48,14 +50,10 @@ jobs:
           target: ${{ matrix.build }}
           override: true
 
-      - name: Build and package libwallet libraries
-        id: build-libwallet
+      - name: Build libwallet libraries
         uses: actions-rs/cargo@v1
         env:
           CFLAGS: "-DMDB_USE_ROBUST=0"
-          # todo: once determined if this 32bit arm build is still required
-          # then make necessary changes to tari comms (metrics fully optional)
-          # cross build --target=armv7-linux-androideabi -p tari_wallet_ffi --release
         with:
           use-cross: true
           command: build
@@ -63,13 +61,13 @@ jobs:
             --release -p tari_wallet_ffi
             --target=${{ matrix.build }}
 
-      - name: Debugging
+      - name: Prepare libwallet libraries
         shell: bash
         run: |
           ls -alht target/${{ matrix.build }}/release/
           mkdir -p "${{ runner.temp }}/libwallet"
           target_temp=${{ matrix.build }}
-          # Strip -linux-android
+          # Strip '-linux-android'
           target_platform=$(echo "${target_temp/-linux-android*/}")
           echo "target_platform=${target_platform}" >> $GITHUB_ENV
           cp -v target/${{ matrix.build }}/release/libtari_wallet_ffi.a "${{ runner.temp }}/libwallet/libtari_wallet_ffi.${target_platform}.a"
@@ -81,7 +79,10 @@ jobs:
           path: ${{ runner.temp }}/libwallet
 
   ios:
-    runs-on: macos-10.15
+    name: Build iOS
+
+    runs-on: macos-latest
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
@@ -107,7 +108,7 @@ jobs:
       - name: Install macOS dependencies
         run: brew install cmake zip
 
-      - name: Build
+      - name: Build libwallet libraries
         run: |
           mkdir -p MobileWallet/TariLib/
           cd base_layer/wallet_ffi
@@ -119,7 +120,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: libwallet-ios
-          path: ${{ github.workspace }}/MobileWallet/TariLib/
+          path: ${{ github.workspace }}/MobileWallet/TariLib/libtari_wallet_ffi.a
 
   create-release:
     runs-on: ubuntu-latest
