@@ -57,7 +57,7 @@ jobs:
           # then make necessary changes to tari comms (metrics fully optional)
           # cross build --target=armv7-linux-androideabi -p tari_wallet_ffi --release
         with:
-          use-cross: yes
+          use-cross: true
           command: build
           args: >
             --release -p tari_wallet_ffi
@@ -86,13 +86,22 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - name: Setup Rust toolchain
+      - name: Setup Rust toolchain (x86_64)
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           components: rustfmt, clippy
           toolchain: ${{ env.toolchain }}
-          target: aarch64-apple-ios, x86_64-apple-ios
+          target: x86_64-apple-ios
+          override: true
+
+      - name: Setup Rust toolchain (aarch64)
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+          toolchain: ${{ env.toolchain }}
+          target: aarch64-apple-ios
           override: true
 
       - name: Install macOS dependencies
