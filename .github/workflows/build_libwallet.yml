@@ -3,13 +3,12 @@ name: Build libwallet on-demand
 
 on:
   workflow_call:
-  workflow_dispatch:
     inputs:
+      toolchain:
+        required: true
+        type: string
       tags:
         description: 'On-demand build description'
-
-env:
-  toolchain: nightly-2022-05-01
 
 jobs:
   android:
@@ -36,7 +35,7 @@ jobs:
         with:
           profile: minimal
           components: rustfmt, clippy
-          toolchain: ${{ env.toolchain }}
+          toolchain: ${{ inputs.toolchain }}
           target: ${{ matrix.build }}
           override: true
 
@@ -81,7 +80,7 @@ jobs:
         with:
           profile: minimal
           components: rustfmt, clippy
-          toolchain: ${{ env.toolchain }}
+          toolchain: ${{ inputs.toolchain }}
           target: x86_64-apple-ios
           override: true
 
@@ -90,7 +89,7 @@ jobs:
         with:
           profile: minimal
           components: rustfmt, clippy
-          toolchain: ${{ env.toolchain }}
+          toolchain: ${{ inputs.toolchain }}
           target: aarch64-apple-ios
           override: true
 

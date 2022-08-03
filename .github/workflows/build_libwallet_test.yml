@@ -20,6 +20,8 @@ env:
 
 jobs:
   reusable_workflow_job:
-    runs-on: ubuntu-latest
+#    runs-on: ubuntu-latest
     steps:
-      - uses: ./.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
+      uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
+      with:
+        toolchain: nightly-2022-05-01
