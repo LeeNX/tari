@@ -26,7 +26,7 @@ jobs:
           x86_64-linux-android,
           aarch64-linux-android,
         ]
-#          armv7-linux-androideabi
+        # armv7-linux-androideabi,
           # todo: once determined if this 32bit arm build is still required
           # then make necessary changes to tari comms (metrics fully optional)
 
@@ -118,6 +118,11 @@ jobs:
           ./mobile_build.sh || exit 1
           shasum -a 256 "$GITHUB_WORKSPACE/MobileWallet/TariLib/libtari_wallet_ffi.a" > "$GITHUB_WORKSPACE/MobileWallet/TariLib/libtari_wallet_ffi.a.sha256"
           ls -alht $GITHUB_WORKSPACE/MobileWallet/TariLib/
+
+      - name: Debugging info?
+        if: failure()
+        run: |
+          ls -alht $GITHUB_WORKSPACE/base_layer/wallet_ffi/logs/ios
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2

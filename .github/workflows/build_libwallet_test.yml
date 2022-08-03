@@ -46,7 +46,8 @@ jobs:
     uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
     with:
       toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
-      build_android: false
+      build_android: true
+      build_ios: true
 
   libwallet_uploads:
     needs: builds_run
@@ -59,5 +60,7 @@ jobs:
 
       - name: Debugging
         shell: bash
-        run: ls -alhtR
         working-directory: libwallet
+        run: |
+          ls -alhtR
+          find . -name *.sha256
