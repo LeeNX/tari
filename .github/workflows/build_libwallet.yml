@@ -7,7 +7,9 @@ on:
       toolchain:
         required: true
         type: string
+        description: 'rust toolchain'
       tags:
+        type: string
         description: 'On-demand build description'
 
 jobs:
