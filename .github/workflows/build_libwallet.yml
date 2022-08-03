@@ -70,7 +70,7 @@ jobs:
           cd "${{ runner.temp }}/libwallet-android-${target_platform}"
           cp -v "$GITHUB_WORKSPACE/target/${{ matrix.build }}/release/libtari_wallet_ffi.a" "libtari_wallet_ffi.${target_platform}.a"
           cd ..
-          shasum -a 256 "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a" > "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a.sha256"
+          shasum -a 256 "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a" > "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a.sha256sums"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
@@ -122,7 +122,7 @@ jobs:
           cd "${{ runner.temp }}/libwallet-ios"
           cp -v "$GITHUB_WORKSPACE/MobileWallet/TariLib/libtari_wallet_ffi.a" .
           cd ..
-          shasum -a 256 "libwallet-ios/libtari_wallet_ffi.a" > "libwallet-ios/libtari_wallet_ffi.a.sha256"
+          shasum -a 256 "libwallet-ios/libtari_wallet_ffi.a" > "libwallet-ios/libtari_wallet_ffi.a.sha256sums"
           ls -alht "${{ runner.temp }}/libwallet-ios"
 
       - name: Debugging info?
