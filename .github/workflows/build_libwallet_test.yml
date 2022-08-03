@@ -25,8 +25,11 @@ env:
 jobs:
   toolchain_set:
     runs-on: ubuntu-latest
+    outputs:
+      toolchain: ${{ steps.toolchain_set.outputs.toolchain }}
     steps:
       - name: Set toolchain
+        id: toolchain_set
         run: |
           if [ -z "${{ inputs.toolchain }}" ]
           then
@@ -38,7 +41,7 @@ jobs:
     needs: toolchain_set
     uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
     with:
-      toolchain: ${{ env.toolchain }}
+      toolchain: "${{ needs.toolchain_set.outputs.toolchain }}"
 
   get_libwallet:
     needs: builds_run
