@@ -31,11 +31,15 @@ jobs:
       - name: Set toolchain
         id: toolchain_set
         run: |
-          if [ -z "${{ inputs.toolchain }}" ]
-          then
-            echo "toolchain=${{ env.toolchain_default }}" >> $GITHUB_ENV
+          if [ -z "${{ inputs.toolchain }}" ]; then
+            echo "Use default"
+            toolchain=${{ env.toolchain_default }}
           else
-            echo "toolchain=${{ inputs.toolchain }}" >> $GITHUB_ENV
+            echo "Use provide input"
+            toolchain=${{ inputs.toolchain }}
+          fi
+          echo "${toolchain} setting"
+          echo "toolchain=${toolchain}" >> $GITHUB_ENV
 
   builds_run:
     needs: toolchain_set
