@@ -23,7 +23,7 @@ env:
   toolchain_default: nightly-2022-05-01
 
 jobs:
-  builds:
+  toolchain_set:
     runs-on: ubuntu-latest
     steps:
       - name: Set toolchain
@@ -34,11 +34,14 @@ jobs:
           else
             echo "toolchain=${{ inputs.toolchain }}" >> $GITHUB_ENV
 
-      - name: Use reusable workflow
-        uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
-        with:
-          toolchain: ${{ env.toolchain }}
+  builds_run:
+    needs: toolchain_set
+    uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
+    with:
+      toolchain: ${{ env.toolchain }}
 
+  get_libwallet:
+    needs: builds_run
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
