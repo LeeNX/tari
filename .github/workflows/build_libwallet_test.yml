@@ -33,13 +33,13 @@ jobs:
         run: |
           if [ -z "${{ inputs.toolchain }}" ]; then
             echo "Using default"
-            toolchain=${{ env.toolchain_default }}
+            btoolchain=${{ env.toolchain_default }}
           else
             echo "Using provided input"
-            toolchain=${{ inputs.toolchain }}
+            btoolchain=${{ inputs.toolchain }}
           fi
-          echo "Rust toolchian - ${toolchain} ."
-          echo "::set-output name=toolchain::${toolchain}"
+          echo "Rust toolchain - ${btoolchain} ."
+          echo "::set-output name=toolchain::${btoolchain}"
 
   builds_run:
     needs: toolchain_set
