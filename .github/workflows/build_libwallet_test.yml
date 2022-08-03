@@ -12,16 +12,39 @@ on:
     - cron: "05 00 * * *"
   workflow_dispatch:
     inputs:
+      toolchain:
+        type: string
+        description: 'Rust toolchain'
       tags:
+        type: string
         description: 'On-demand build description'
 
 env:
-  toolchain: nightly-2022-05-01
+  toolchain_default: nightly-2022-05-01
 
 jobs:
-  reusable_workflow_job:
-#    runs-on: ubuntu-latest
-#    steps:
-    uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
-    with:
-      toolchain: nightly-2022-05-01
+  builds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set toolchain
+        run: |
+          if [ -z "${{ inputs.toolchain }}" ]
+          then
+            echo "toolchain=${{ env.toolchain_default }}" >> $GITHUB_ENV
+          else
+            echo "toolchain=${{ inputs.toolchain }}" >> $GITHUB_ENV
+
+      - name: Use reusable workflow
+        uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
+        with:
+          toolchain: ${{ env.toolchain }}
+
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          path: libwallet
+
+      - name: Debugging
+        shell: bash
+        run: ls -alhtR
+        working-directory: libwallet
