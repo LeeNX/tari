@@ -1,0 +1,112 @@
+---
+name: Build libwallet
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'On-demand build description'
+
+env:
+  toolchain: nightly-2022-05-01
+
+jobs:
+  android:
+    name: Build Android
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [
+          x86_64-linux-android,
+          aarch64-linux-android,
+        ]
+#          armv7-linux-androideabi
+          # todo: once determined if this 32bit arm build is still required
+          # then make necessary changes to tari comms (metrics fully optional)
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+          toolchain: ${{ env.toolchain }}
+          target: ${{ matrix.build }}
+          override: true
+
+      - name: Build libwallet libraries
+        uses: actions-rs/cargo@v1
+        env:
+          CFLAGS: "-DMDB_USE_ROBUST=0"
+        with:
+          use-cross: true
+          command: build
+          args: >
+            --release -p tari_wallet_ffi
+            --target=${{ matrix.build }}
+
+      - name: Prepare libwallet libraries
+        shell: bash
+        run: |
+          mkdir -p "${{ runner.temp }}/libwallet"
+          target_temp=${{ matrix.build }}
+          # Strip '-linux-android'
+          target_platform=$(echo "${target_temp/-linux-android*/}")
+          echo "target_platform=${target_platform}" >> $GITHUB_ENV
+          cp -v target/${{ matrix.build }}/release/libtari_wallet_ffi.a "${{ runner.temp }}/libwallet/libtari_wallet_ffi.${target_platform}.a"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: libwallet-android-${{ env.target_platform }}
+          path: ${{ runner.temp }}/libwallet
+
+  ios:
+    name: Build iOS
+
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Setup Rust toolchain (x86_64)
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+          toolchain: ${{ env.toolchain }}
+          target: x86_64-apple-ios
+          override: true
+
+      - name: Setup Rust toolchain (aarch64)
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+          toolchain: ${{ env.toolchain }}
+          target: aarch64-apple-ios
+          override: true
+
+      - name: Install macOS dependencies
+        run: brew install cmake
+
+      - name: Build libwallet libraries
+        run: |
+          mkdir -p MobileWallet/TariLib/
+          cd base_layer/wallet_ffi
+          mv ios.config build.config
+          ./mobile_build.sh || exit 1
+          ls -alht $GITHUB_WORKSPACE/MobileWallet/TariLib/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: libwallet-ios
+          path: ${{ github.workspace }}/MobileWallet/TariLib/libtari_wallet_ffi.a
