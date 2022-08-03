@@ -67,8 +67,8 @@ jobs:
           target_platform=$(echo "${target_temp/-linux-android*/}")
           echo "target_platform=${target_platform}" >> $GITHUB_ENV
           mkdir -p "${{ runner.temp }}/libwallet-android-${target_platform}"
-          cd ${{ runner.temp }}/libwallet-android-${target_platform}
-          cp -v "target/${{ matrix.build }}/release/libtari_wallet_ffi.a" "libtari_wallet_ffi.${target_platform}.a"
+          cd "${{ runner.temp }}/libwallet-android-${target_platform}"
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.build }}/release/libtari_wallet_ffi.a" "libtari_wallet_ffi.${target_platform}.a"
           cd ..
           shasum -a 256 "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a" > "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a.sha256"
 
@@ -123,7 +123,7 @@ jobs:
           cp -v "$GITHUB_WORKSPACE/MobileWallet/TariLib/libtari_wallet_ffi.a" .
           cd ..
           shasum -a 256 "libwallet-ios/libtari_wallet_ffi.a" > "libwallet-ios/libtari_wallet_ffi.a.sha256"
-          ls -alht ""${{ runner.temp }}/libwallet-ios"
+          ls -alht "${{ runner.temp }}/libwallet-ios"
 
       - name: Debugging info?
         if: failure()
