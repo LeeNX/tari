@@ -1,0 +1,24 @@
+---
+name: Build libwallet on-demand - Test
+
+on:
+  push:
+    branches:
+      - "libwallet-*"
+      - "build-leet-*"
+    tags:
+      - "libwallet-*"
+  schedule:
+    - cron: "05 00 * * *"
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'On-demand build description'
+
+env:
+  toolchain: nightly-2022-05-01
+
+jobs:
+  reusable_workflow_job:
+    steps:
+      - uses: ./.github/workflows/build_libwallet.yml
