@@ -14,8 +14,6 @@ on:
     inputs:
       toolchain:
         type: string
-        required: true
-        default: 'nightly-2022-05-01'
         description: 'Rust toolchain'
       tags:
         type: string
@@ -29,6 +27,7 @@ jobs:
     uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
     with:
       toolchain: ${{ inputs.toolchain }}
+      build_android: false
 
   libwallet_uploads:
     needs: builds_run

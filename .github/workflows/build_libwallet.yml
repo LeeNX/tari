@@ -4,14 +4,21 @@ name: Build libwallet on-demand
 on:
   workflow_call:
     inputs:
+      build_android:
+        type: boolean
+        default: true
+      build_ios:
+        type: boolean
+        default: true
       toolchain:
         type: string
-        required: true
+        default: 'nightly-2022-05-01'
         description: 'Rust toolchain'
 
 jobs:
   android:
     name: Build Android
+    if: ${{ inputs.build_android }}
     strategy:
       fail-fast: false
       matrix:
@@ -71,6 +78,7 @@ jobs:
 
   ios:
     name: Build iOS
+    if: ${{ inputs.build_ios }}
 
     runs-on: macos-latest
 
