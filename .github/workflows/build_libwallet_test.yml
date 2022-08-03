@@ -63,4 +63,5 @@ jobs:
         working-directory: libwallet
         run: |
           ls -alhtR
-          find . -name *.sha256
+          find . -name *.sha256 -print | xargs cat >> libwallet.sha256
+          sha256sum --ignore-missing -c libwallet.sha256

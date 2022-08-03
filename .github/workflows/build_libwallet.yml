@@ -62,13 +62,15 @@ jobs:
       - name: Prepare libwallet libraries
         shell: bash
         run: |
-          mkdir -p "${{ runner.temp }}/libwallet"
           target_temp=${{ matrix.build }}
           # Strip '-linux-android'
           target_platform=$(echo "${target_temp/-linux-android*/}")
           echo "target_platform=${target_platform}" >> $GITHUB_ENV
-          cp -v target/${{ matrix.build }}/release/libtari_wallet_ffi.a "${{ runner.temp }}/libwallet/libtari_wallet_ffi.${target_platform}.a"
-          shasum -a 256 "${{ runner.temp }}/libwallet/libtari_wallet_ffi.${target_platform}.a" > "${{ runner.temp }}/libwallet/libtari_wallet_ffi.${target_platform}.a.sha256"
+          mkdir -p "${{ runner.temp }}/libwallet-android-${target_platform}"
+          cd ${{ runner.temp }}/libwallet-android-${target_platform}
+          cp -v "target/${{ matrix.build }}/release/libtari_wallet_ffi.a" "libtari_wallet_ffi.${target_platform}.a"
+          cd ..
+          shasum -a 256 "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a" > "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a.sha256"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
@@ -116,8 +118,12 @@ jobs:
           cd base_layer/wallet_ffi
           mv ios.config build.config
           ./mobile_build.sh || exit 1
-          shasum -a 256 "$GITHUB_WORKSPACE/MobileWallet/TariLib/libtari_wallet_ffi.a" > "$GITHUB_WORKSPACE/MobileWallet/TariLib/libtari_wallet_ffi.a.sha256"
-          ls -alht $GITHUB_WORKSPACE/MobileWallet/TariLib/
+          mkdir -p "${{ runner.temp }}/libwallet-ios"
+          cd "${{ runner.temp }}/libwallet-ios"
+          cp -v "$GITHUB_WORKSPACE/MobileWallet/TariLib/libtari_wallet_ffi.a" .
+          cd ..
+          shasum -a 256 "libwallet-ios/libtari_wallet_ffi.a" > "libwallet-ios/libtari_wallet_ffi.a.sha256"
+          ls -alht ""${{ runner.temp }}/libwallet-ios"
 
       - name: Debugging info?
         if: failure()
@@ -128,4 +134,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: libwallet-ios
-          path: ${{ github.workspace }}/MobileWallet/TariLib/libtari_wallet_ffi.a*
+          path: ${{ runner.temp }}/libwallet-ios
