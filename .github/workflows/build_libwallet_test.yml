@@ -42,6 +42,8 @@ jobs:
 
   get_libwallet:
     needs: builds_run
+    runs-on: ubuntu-latest
+    steps:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
