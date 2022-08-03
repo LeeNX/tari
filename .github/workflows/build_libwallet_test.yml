@@ -56,12 +56,13 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          path: libwallet
+          path: libwallets
 
       - name: Debugging
         shell: bash
-        working-directory: libwallet
+        working-directory: libwallets
         run: |
           ls -alhtR
-          find . -name *.sha256 -print | xargs cat >> libwallet.sha256
-          sha256sum --ignore-missing -c libwallet.sha256
+          find . -name "*.a.sha256" -print | xargs cat >> libwallets.txt.sha256
+          cat libwallets.txt.sha256
+          sha256sum -c libwallets.txt.sha256

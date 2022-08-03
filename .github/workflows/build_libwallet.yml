@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: libwallet-android-${{ env.target_platform }}
-          path: ${{ runner.temp }}/libwallet
+          path: ${{ runner.temp }}/libwallet-android-${{ env.target_platform }}
 
   ios:
     name: Build iOS
