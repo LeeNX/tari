@@ -1,5 +1,5 @@
 ---
-name: Build libwallet
+name: Build libwallet on-demand
 
 on:
   workflow_call:
