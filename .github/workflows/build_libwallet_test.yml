@@ -39,7 +39,7 @@ jobs:
             toolchain=${{ inputs.toolchain }}
           fi
           echo "Rust toolchian - ${toolchain} ."
-          echo "toolchain=${toolchain}" >> $GITHUB_ENV
+          echo "::set-output name=toolchain::${toolchain}"
 
   debug_run:
     needs: toolchain_set
@@ -47,7 +47,7 @@ jobs:
     steps:
       - name: Debugging
         shell: bash
-        run: echo "Deugging for env ${{ needs.toolchain_set.outputs.toolchain }}""
+        run: echo "Deugging for env ${{ needs.toolchain_set.outputs.toolchain }}"
 
   builds_run:
     needs: toolchain_set
