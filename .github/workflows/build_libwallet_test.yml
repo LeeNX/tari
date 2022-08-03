@@ -20,5 +20,6 @@ env:
 
 jobs:
   reusable_workflow_job:
+    runs-on: ubuntu-latest
     steps:
       - uses: ./.github/workflows/build_libwallet.yml
