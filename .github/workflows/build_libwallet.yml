@@ -37,6 +37,9 @@ jobs:
           target: ${{ matrix.build }}
           override: true
 
+      - name: Cache cargo files and outputs
+        uses: Swatinem/rust-cache@v1
+
       - name: Build libwallet libraries
         uses: actions-rs/cargo@v1
         env:
@@ -93,6 +96,9 @@ jobs:
 
       - name: Install macOS dependencies
         run: brew install cmake
+
+      - name: Cache cargo files and outputs
+        uses: Swatinem/rust-cache@v1
 
       - name: Build libwallet libraries
         run: |

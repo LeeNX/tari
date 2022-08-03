@@ -41,14 +41,6 @@ jobs:
           echo "Rust toolchian - ${toolchain} ."
           echo "::set-output name=toolchain::${toolchain}"
 
-  debug_run:
-    needs: toolchain_set
-    runs-on: ubuntu-latest
-    steps:
-      - name: Debugging
-        shell: bash
-        run: echo "Deugging for env ${{ needs.toolchain_set.outputs.toolchain }}"
-
   builds_run:
     needs: toolchain_set
     uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
