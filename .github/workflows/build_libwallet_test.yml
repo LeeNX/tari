@@ -47,7 +47,7 @@ jobs:
     with:
       toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
       build_android: true
-      build_ios: true
+      build_ios: false
 
   libwallet_uploads:
     needs: builds_run
