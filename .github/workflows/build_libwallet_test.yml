@@ -43,11 +43,12 @@ jobs:
 
   builds_run:
     needs: toolchain_set
-    uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
+    #uses: leet4tari/tari/.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
+    uses: ./.github/workflows/build_libwallet.yml@build-leet-testnet-dibbler-libwallet-test
     with:
       toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
       build_android: true
-      build_ios: true
+      build_ios: false
 
   libwallet_uploads:
     needs: builds_run
