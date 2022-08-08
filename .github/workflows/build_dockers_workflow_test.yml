@@ -44,4 +44,5 @@ jobs:
     needs: toolchain_set
     uses: ./.github/workflows/build_dockers_workflow.yml
     with:
+      secrets: inherit
       toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
