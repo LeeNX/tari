@@ -95,8 +95,8 @@ jobs:
           file: ./tari-launchpad/docker_rig/${{ inputs.dockerfile }}.Dockerfile
           platforms: ${{ inputs.platforms }}
           push: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          #cache-from: type=gha
+          #cache-to: type=gha,mode=max
           build-args: |
             ARCH=${{ inputs.arch }}
             FEATURES=${{ inputs.features }}
