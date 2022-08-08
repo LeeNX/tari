@@ -64,7 +64,9 @@ jobs:
       - name: checkout tari-launchpad
         uses: actions/checkout@v3
         with:
-          repository: tari-project/tari-launchpad
+          # repository: tari-project/tari-launchpad
+          repository: leet4tari/tari-launchpad
+          ref: build-leet-tari
           path: tari-launchpad
 
       - name: prep work
