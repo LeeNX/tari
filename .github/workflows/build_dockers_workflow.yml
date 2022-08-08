@@ -66,7 +66,7 @@ jobs:
         with:
           # repository: tari-project/tari-launchpad
           repository: leet4tari/tari-launchpad
-          ref: build-leet-tari
+          ref: build-leet-tari-test
           path: tari-launchpad
 
       - name: prep work
