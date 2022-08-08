@@ -3,6 +3,13 @@ name: Build docker images on-demand
 
 on:
   workflow_call:
+    secrets:
+      DOCKER_PROVIDER:
+        required: true
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
     inputs:
       toolchain:
         type: string
