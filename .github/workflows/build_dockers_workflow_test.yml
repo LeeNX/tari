@@ -1,0 +1,47 @@
+---
+name: Build docker images - Test
+
+on:
+  push:
+    branches:
+      - "build-leet-*"
+    tags:
+      - "libwallet-*"
+  schedule:
+    - cron: "05 00 * * *"
+  workflow_dispatch:
+    inputs:
+      toolchain:
+        type: string
+        description: 'Rust toolchain'
+      tags:
+        type: string
+        description: 'On-demand build description'
+
+env:
+  toolchain_default: nightly-2022-05-01
+
+jobs:
+  toolchain_set:
+    runs-on: ubuntu-latest
+    outputs:
+      toolchain: ${{ steps.toolchain_set.outputs.toolchain }}
+    steps:
+      - name: Set toolchain
+        id: toolchain_set
+        run: |
+          if [ -z "${{ inputs.toolchain }}" ]; then
+            echo "Using default"
+            btoolchain=${{ env.toolchain_default }}
+          else
+            echo "Using provided input"
+            btoolchain=${{ inputs.toolchain }}
+          fi
+          echo "Rust toolchain - ${btoolchain} ."
+          echo "::set-output name=toolchain::${btoolchain}"
+
+  builds_run:
+    needs: toolchain_set
+    uses: ./.github/workflows/build_dockers_workflow.yml
+    with:
+      toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
