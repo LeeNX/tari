@@ -17,6 +17,15 @@ on:
       tags:
         type: string
         description: 'On-demand build description'
+      platforms:
+        description: 'Docker build platform(s)'
+        default: linux/amd64
+        required: true
+        type: choice
+        options:
+        - linux/amd64
+        - linux/arm64
+        - linux/arm64, linux/amd64
 
 env:
   toolchain_default: nightly-2022-05-01
@@ -46,3 +55,4 @@ jobs:
     secrets: inherit
     with:
       toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
+      platforms: ${{ inputs.platforms }}
