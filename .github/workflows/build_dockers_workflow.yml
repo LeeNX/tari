@@ -90,7 +90,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: ./${{ inputs.dockercontext }}/
-          file: ./tari-launchpad/docker_rig/${{ inputs.dockerfile }}
+          file: ./tari-launchpad/docker_rig/${{ inputs.dockerfile }}.Dockerfile
           platforms: ${{ inputs.platforms }}
           push: true
           cache-from: type=gha
