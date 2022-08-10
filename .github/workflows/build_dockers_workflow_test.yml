@@ -14,6 +14,12 @@ on:
       toolchain:
         type: string
         description: 'Rust toolchain'
+      version:
+        type: string
+        description: 'build tag/version'
+      tag_alias:
+        type: string
+        description: 'build tag alias'
       tags:
         type: string
         description: 'On-demand build description'
@@ -56,3 +62,5 @@ jobs:
     with:
       toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
       platforms: ${{ inputs.platforms }}
+      version: ${{ inputs.version }}
+      tag_alias: ${{ inputs.tag_alias }}
