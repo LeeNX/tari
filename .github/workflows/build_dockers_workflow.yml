@@ -23,7 +23,10 @@ on:
         default: safe
       version:
         type: string
-        default: v0.32.12_testnet-dibbler_20220808_leet
+        description: 'build tag/version'
+      tag_alias:
+        type: string
+        description: 'build tag alias'
       image_name:
         type: string
         default: tari_sha3_miner
@@ -43,9 +46,6 @@ on:
         type: string
         default: linux/amd64
         # linux/arm64, linux/amd64
-      tags:
-        type: string
-        description: 'On-demand build description'
 
 jobs:
   docker_build:
@@ -69,11 +69,27 @@ jobs:
           ref: build-leet-tari-test-cache
           path: tari-launchpad
 
-      - name: prep work
+      - name: environment setup
         shell: bash
         run: |
           mkdir -p tari/buildtools/docker_rig
           cp -v tari-launchpad/docker_rig/start_tari_app.sh tari/buildtools/docker_rig/start_tari_app.sh
+          if [ -z "${{ inputs.version }}" ]; then
+            TARI_SOURCE_ROOT="tari/"
+            VAPP=$(awk -F ' = ' \
+              '$1 ~ /version/ { gsub(/["]/, "", $2); printf("%s",$2) }' \
+              "${TARI_SOURCE_ROOT}/applications/tari_base_node/Cargo.toml")
+
+            VBRANCH=$(git --git-dir ${TARI_SOURCE_ROOT}/.git branch --show-current)
+            VSHA_SHORT=$(git --git-dir ${TARI_SOURCE_ROOT}/.git rev-parse --short HEAD)
+            bversion="v${VAPP}_${VBRANCH}_$(date -u '+%Y%m%d')_${VSHA_SHORT}"
+          else
+            bversion=${{ inputs.version }}
+          fi
+          echo "::set-output name=version::${bversion}"
+          if [ ! -z "${{ inputs.tag_alias }}" ]; then
+            echo "::set-output name=tag_alias::${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.tag_alias }}
+          fi
 
       - name: Login to Docker Image Provider
         uses: docker/login-action@v1
@@ -101,11 +117,12 @@ jobs:
           build-args: |
             ARCH=${{ inputs.arch }}
             FEATURES=${{ inputs.features }}
-            VERSION=${{ inputs.version }}
+            VERSION=${{ env.version }}
             APP_NAME=${{ inputs.app_name }}
             APP_EXEC=${{ inputs.app_exec }}
           tags: |
-            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.version }}
+            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ env.version }}
+            ${{ env.tag_alias }}
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
