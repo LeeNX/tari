@@ -87,7 +87,7 @@ jobs:
             bversion=${{ inputs.version }}
           fi
           echo "Setting ${bversion} as docker tag"
-          echo "::set-output name=version::${bversion}"
+          echo "::set-output name=version::$bversion"
           if [ ! -z "${{ inputs.tag_alias }}" ]; then
             echo "Setup tag_alias"
             echo "::set-output name=tag_alias::${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.tag_alias }}"
