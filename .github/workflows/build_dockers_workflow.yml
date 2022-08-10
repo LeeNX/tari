@@ -89,14 +89,15 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Docker image build and push
+        id: docker_build
         uses: docker/build-push-action@v3
         with:
           context: ./${{ inputs.dockercontext }}/
           file: ./tari-launchpad/docker_rig/${{ inputs.dockerfile }}.Dockerfile
           platforms: ${{ inputs.platforms }}
           push: true
-          #cache-from: type=gha
-          #cache-to: type=gha,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             ARCH=${{ inputs.arch }}
             FEATURES=${{ inputs.features }}
@@ -105,3 +106,6 @@ jobs:
             APP_EXEC=${{ inputs.app_exec }}
           tags: |
             ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.version }}
+
+      - name: Image digest
+        run: echo ${{ steps.docker_build.outputs.digest }}
