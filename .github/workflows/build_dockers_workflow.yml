@@ -87,11 +87,10 @@ jobs:
             bversion=${{ inputs.version }}
           fi
           echo "Setting ${bversion} as docker tag"
-          #echo "::set-output name=version::$bversion"
           echo "version=${bversion}" >> $GITHUB_ENV
           if [ ! -z "${{ inputs.tag_alias }}" ]; then
             echo "Setup tag_alias"
-            echo "::set-output name=tag_alias::${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.tag_alias }}"
+            echo "tag_alias=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
           fi
 
       - name: Login to Docker Image Provider
@@ -106,13 +105,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: debug environment setup
-        shell: bash
-        run: |
-          echo "Debug"
-          echo ${{ env.version }}
-          echo "Done"
 
       - name: Docker image build and push
         id: docker_build
