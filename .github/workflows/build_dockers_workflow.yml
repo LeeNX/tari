@@ -88,7 +88,7 @@ jobs:
           fi
           echo "::set-output name=version::${bversion}"
           if [ ! -z "${{ inputs.tag_alias }}" ]; then
-            echo "::set-output name=tag_alias::${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.tag_alias }}
+            echo "::set-output name=tag_alias::${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.tag_alias }}"
           fi
 
       - name: Login to Docker Image Provider
