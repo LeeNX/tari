@@ -3,10 +3,10 @@ name: Build docker images - Test
 
 on:
   push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
     branches:
       - "build-leet-*"
-    tags:
-      - "libwallet-*"
   schedule:
     - cron: "05 00 * * *"
   workflow_dispatch:
@@ -20,9 +20,6 @@ on:
       tag_alias:
         type: string
         description: 'build tag alias'
-      tags:
-        type: string
-        description: 'On-demand build description'
       platforms:
         description: 'Docker build platform(s)'
         default: linux/amd64
@@ -37,13 +34,15 @@ env:
   toolchain_default: nightly-2022-05-01
 
 jobs:
-  toolchain_set:
+  envs_setup:
     runs-on: ubuntu-latest
     outputs:
-      toolchain: ${{ steps.toolchain_set.outputs.toolchain }}
+      toolchain: ${{ steps.set_toolchain.outputs.toolchain }}
+      matrix: ${{ steps.set_matrix.outputs.matrix }}
+
     steps:
       - name: Set toolchain
-        id: toolchain_set
+        id: set_toolchain
         run: |
           if [ -z "${{ inputs.toolchain }}" ]; then
             echo "Using default"
@@ -53,14 +52,38 @@ jobs:
             btoolchain=${{ inputs.toolchain }}
           fi
           echo "Rust toolchain - ${btoolchain} ."
-          echo "::set-output name=toolchain::${btoolchain}"
+          echo "toolchain=${btoolchain}" >> $GITHUB_ENV
+
+      - name: checkout tari-launchpad
+        uses: actions/checkout@v3
+        with:
+          # repository: tari-project/tari-launchpad
+          repository: leet4tari/tari-launchpad
+          ref: build-leet-tari-test-cache
+          path: tari-launchpad
+
+      - name: Set Matrix
+        id: set_matrix
+        run: |
+          matrix=$( jq -s -c .[] tari-launchpad/tarisuite.json )
+
+          echo $matrix
+          echo $matrix | jq .
+          #echo "::set-output name=matrix::$matrix"
+          echo "matrix=${matrix}" >> $GITHUB_ENV
 
   builds_run:
-    needs: toolchain_set
+    needs: envs_setup
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.envs_setup.outputs.matrix) }}
     uses: ./.github/workflows/build_dockers_workflow.yml
     secrets: inherit
     with:
-      toolchain: ${{ needs.toolchain_set.outputs.toolchain }}
+      image_name: ${{ matrix.image_name }}
+      app_name: ${{ matrix.app_name }}
+      app_exec: ${{ matrix.app_exec }}
+      toolchain: ${{ needs.envs_setup.outputs.toolchain }}
       platforms: ${{ inputs.platforms }}
       version: ${{ inputs.version }}
       tag_alias: ${{ inputs.tag_alias }}
