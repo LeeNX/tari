@@ -21,14 +21,29 @@ on:
         type: string
         description: 'build tag alias'
       platforms:
-        description: 'Docker build platform(s)'
         default: linux/amd64
         required: true
+        description: 'Docker build platform(s)'
         type: choice
         options:
         - linux/amd64
         - linux/arm64
         - linux/arm64, linux/amd64
+      build_items:
+        default: tari_all
+        description: 'build images - tari_all'
+        type: choice
+        options:
+        - all
+        - tari_all
+        - tari_base_node
+        - tari_wallet
+        - tari_mm_proxy
+        - tari_sha3_miner
+        - 3rdparty_all
+        - tor
+        - monerod
+        - xmrig
 
 env:
   toolchain_default: nightly-2022-05-01
@@ -62,3 +77,4 @@ jobs:
       platforms: ${{ inputs.platforms }}
       version: ${{ inputs.version }}
       tag_alias: ${{ inputs.tag_alias }}
+      build_items: ${{ inputs.build_items }}

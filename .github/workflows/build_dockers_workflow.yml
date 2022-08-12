@@ -27,25 +27,21 @@ on:
       tag_alias:
         type: string
         description: 'build tag alias'
-      image_name:
+      build_items:
         type: string
-        default: tari_sha3_miner
-      app_name:
-        type: string
-        default: sha3_miner
-      app_exec:
-        type: string
-        default: tari_miner
+        default: tari_all
+        description: 'build images - tari_all'
       dockercontext:
         type: string
         default: tari
       dockerfile:
         type: string
+        # tarilabs, tor, monerod, xmrig
         default: tarilabs
       platforms:
         type: string
-        default: linux/amd64
         # linux/arm64, linux/amd64
+        default: linux/amd64
 
 jobs:
   envs_setup:
@@ -64,9 +60,18 @@ jobs:
 
       - name: Set Matrix
         id: set_matrix
+        shell: bash
         run: |
-          # Build all targets images
-          matrix_selection=$( jq -s -c .[] tari-launchpad/tarisuite.json )
+          if [ -z "${{ inputs.build_items }}" ] || [ "${{ inputs.build_items }}" = "tari_all" ] ; then
+            # Build all tari targets images
+            matrix_selection=$( jq -s -c .[] tari-launchpad/tarisuite.json )
+          elif [ "${{ inputs.build_items }}" == "tari_" ] ; then
+            # Build only selected tari images
+            matrix_selection=$( jq --arg jsonVar "${{ inputs.build_items }}" -r '. [] \
+              | select(."image_name"==$jsonVar) \
+              | to_entries[] | .key + "=" + .value' tari-launchpad/tarisuite.json) )
+          fi
+
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .[]}')
 
