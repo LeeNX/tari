@@ -65,7 +65,10 @@ jobs:
       - name: Set Matrix
         id: set_matrix
         run: |
-          matrix=$( jq -s -c .[] tari-launchpad/tarisuite.json )
+          # Build all targets images
+          matrix_selection=$( jq -s -c .[] tari-launchpad/tarisuite.json )
+          # Setup the json build matrix
+          matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
 
           echo $matrix
           echo $matrix | jq .
