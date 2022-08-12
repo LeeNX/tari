@@ -62,14 +62,16 @@ jobs:
         id: set_matrix
         shell: bash
         run: |
-          if [ -z "${{ inputs.build_items }}" ] || [ "${{ inputs.build_items }}" = "tari_all" ] ; then
+          build_items=${{ inputs.build_items }}
+          echo "Building with ${build_items}."
+          if [ -z "${build_items}" ] || [ "${build_items}" = "tari_all" ] ; then
             # Build all tari targets images
             matrix_selection=$( jq -s -c .[] tari-launchpad/tarisuite.json )
-          elif [ "${{ inputs.build_items }}" == "tari_" ] ; then
+          elif [ "${build_items}" == "tari_" ] ; then
             # Build only selected tari images
-            matrix_selection=$( jq --arg jsonVar "${{ inputs.build_items }}" -r '. [] \
+            matrix_selection=$( jq --arg jsonVar "${build_items}" -r '. [] \
               | select(."image_name"==$jsonVar) \
-              | to_entries[] | .key + "=" + .value' tari-launchpad/tarisuite.json) )
+              | to_entries[] | .key + "=" + .value' tari-launchpad/tarisuite.json )
           fi
 
           # Setup the json build matrix
