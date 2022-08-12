@@ -34,7 +34,7 @@ env:
   toolchain_default: nightly-2022-05-01
 
 jobs:
-  envs_setup:
+  test_envs_setup:
     runs-on: ubuntu-latest
     outputs:
       toolchain: ${{ steps.set_toolchain.outputs.toolchain }}
@@ -54,6 +54,7 @@ jobs:
           echo "toolchain=${btoolchain}" >> $GITHUB_ENV
 
   builds_run:
+    needs: test_envs_setup
     uses: ./.github/workflows/build_dockers_workflow.yml
     secrets: inherit
     with:
