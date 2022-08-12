@@ -30,7 +30,7 @@ on:
         - linux/arm64
         - linux/arm64, linux/amd64
       build_items:
-        default: tari_all
+        default: tari_mm_proxy
         description: 'build images - tari_all'
         type: choice
         options:

@@ -29,7 +29,7 @@ on:
         description: 'build tag alias'
       build_items:
         type: string
-        default: tari_all
+        default: tari_sha3_miner
         description: 'build images - tari_all'
       dockercontext:
         type: string
@@ -65,12 +65,12 @@ jobs:
           build_items=${{ inputs.build_items }}
           echo "Building with ${build_items}."
           if [ -z "${build_items}" ] || [ "${build_items}" = "tari_all" ] ; then
-            # Build all tari targets images
+            echo "Build all tari images"
             matrix_selection=$( jq -s -c .[] tari-launchpad/tarisuite.json )
           elif [ "${build_items}" == "tari_" ] ; then
-            # Build only selected tari images
-            matrix_selection=$( jq --arg jsonVar "${build_items}" -r '. [] \
-              | select(."image_name"==$jsonVar) \
+            echo "Build only selected tari images - ${build_items}"
+            matrix_selection=$( jq --arg jsonVar "${build_items}" -r '. []
+              | select(."image_name"==$jsonVar)
               | to_entries[] | .key + "=" + .value' tari-launchpad/tarisuite.json )
           fi
 
