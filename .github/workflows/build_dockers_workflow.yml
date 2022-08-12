@@ -67,7 +67,7 @@ jobs:
           if [ -z "${build_items}" ] || [ "${build_items}" = "tari_all" ] ; then
             echo "Build all tari images"
             matrix_selection=$( jq -s -c .[] tari-launchpad/tarisuite.json )
-          elif [ "${build_items}" == "tari_" ] ; then
+          elif [ "${build_items:0:5}" = "tari_" ] ; then
             echo "Build only selected tari images - ${build_items}"
             matrix_selection=$( jq --arg jsonVar "${build_items}" -r '. []
               | select(."image_name"==$jsonVar)
