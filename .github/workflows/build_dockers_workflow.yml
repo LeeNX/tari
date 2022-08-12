@@ -31,13 +31,6 @@ on:
         type: string
         default: tari_sha3_miner
         description: 'build images - tari_all'
-      dockercontext:
-        type: string
-        default: tari
-      dockerfile:
-        type: string
-        # tarilabs, tor, monerod, xmrig
-        default: tarilabs
       platforms:
         type: string
         # linux/arm64, linux/amd64
@@ -107,9 +100,9 @@ jobs:
       - name: environment setup
         shell: bash
         run: |
-          mkdir -p tari/buildtools/docker_rig
-          cp -v tari-launchpad/docker_rig/start_tari_app.sh tari/buildtools/docker_rig/start_tari_app.sh
+          IMAGE_NAME=${{ matrix.builds.image_name }}
           if [ -z "${{ inputs.version }}" ]; then
+            echo "Get tari version"
             TARI_SOURCE_ROOT="tari/"
             VAPP=$(awk -F ' = ' \
               '$1 ~ /version/ { gsub(/["]/, "", $2); printf("%s",$2) }' \
@@ -117,18 +110,22 @@ jobs:
 
             VBRANCH=$(git --git-dir ${TARI_SOURCE_ROOT}/.git branch --show-current)
             VSHA_SHORT=$(git --git-dir ${TARI_SOURCE_ROOT}/.git rev-parse --short HEAD)
-            bversion="v${VAPP}_${VBRANCH}_$(date -u '+%Y%m%d')_${VSHA_SHORT}"
+            VERSION="v${VAPP}_${VBRANCH}_$(date -u '+%Y%m%d')_${VSHA_SHORT}"
           else
-            bversion=${{ inputs.version }}
+            VERSION=${{ inputs.version }}
           fi
-          echo "Setting ${bversion} as docker tag"
-          echo "version=${bversion}" >> $GITHUB_ENV
+          echo "Setting ${VERSION} as docker tag"
+          echo "version=${VERSION}" >> $GITHUB_ENV
           if [ ! -z "${{ inputs.tag_alias }}" ]; then
             echo "Setup tag_alias"
             echo "tag_alias=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.builds.image_name }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
           fi
-          echo "Debug - ${{ matrix.builds.image_name }} : ${{ matrix.builds.app_name }} : ${{ matrix.builds.app_exec }} | "
-
+          if [ "${IMAGE_NAME:0:5}" = "tari_" ] ; then
+            echo "Tari builds"
+            mkdir -p tari/buildtools/docker_rig
+            cp -v tari-launchpad/docker_rig/start_tari_app.sh tari/buildtools/docker_rig/start_tari_app.sh
+            echo "dockerfile=tarilabs" >> $GITHUB_ENV
+          fi
 
       - name: Login to Docker Image Provider
         uses: docker/login-action@v1
@@ -147,16 +144,16 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v3
         with:
-          context: ./${{ inputs.dockercontext }}/
-          file: ./tari-launchpad/docker_rig/${{ inputs.dockerfile }}.Dockerfile
+          context: ./tari/
+          file: ./tari-launchpad/docker_rig/${{ env.dockerfile }}.Dockerfile
           platforms: ${{ inputs.platforms }}
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
+            VERSION=${{ env.version }}
             ARCH=${{ inputs.arch }}
             FEATURES=${{ inputs.features }}
-            VERSION=${{ env.version }}
             APP_NAME=${{ matrix.builds.app_name }}
             APP_EXEC=${{ matrix.builds.app_exec }}
           tags: |
