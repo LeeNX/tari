@@ -70,8 +70,7 @@ jobs:
           elif [ "${build_items:0:5}" = "tari_" ] ; then
             echo "Build only selected tari images - ${build_items}"
             matrix_selection=$( jq --arg jsonVar "${build_items}" -r '. []
-              | select(."image_name"==$jsonVar)
-              | to_entries[] | .key + "=" + .value' tari-launchpad/tarisuite.json )
+              | select(."image_name"==$jsonVar)' tari-launchpad/tarisuite.json )
           fi
 
           # Setup the json build matrix
