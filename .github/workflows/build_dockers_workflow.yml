@@ -48,9 +48,35 @@ on:
         # linux/arm64, linux/amd64
 
 jobs:
+  envs_setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set_matrix.outputs.matrix }}
+
+    steps:
+      - name: checkout tari-launchpad
+        uses: actions/checkout@v3
+        with:
+          # repository: tari-project/tari-launchpad
+          repository: leet4tari/tari-launchpad
+          ref: build-leet-tari-test-cache
+          path: tari-launchpad
+
+      - name: Set Matrix
+        id: set_matrix
+        run: |
+          matrix=$( jq -s -c .[] tari-launchpad/tarisuite.json )
+
+          echo $matrix
+          echo $matrix | jq .
+          #echo "::set-output name=matrix::$matrix"
+          echo "matrix=${matrix}" >> $GITHUB_ENV
+
   docker_build:
+    needs: envs_setup
     strategy:
-      fail-fast: true
+      fail-fast: false
+      matrix: ${{ fromJson(needs.envs_setup.outputs.matrix) }}
 
     runs-on: ubuntu-latest
 
@@ -59,7 +85,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: tari
-          submodules: recursive
 
       - name: checkout tari-launchpad
         uses: actions/checkout@v3
@@ -90,7 +115,7 @@ jobs:
           echo "version=${bversion}" >> $GITHUB_ENV
           if [ ! -z "${{ inputs.tag_alias }}" ]; then
             echo "Setup tag_alias"
-            echo "tag_alias=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
+            echo "tag_alias=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.image_name }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
           fi
 
       - name: Login to Docker Image Provider
@@ -120,10 +145,10 @@ jobs:
             ARCH=${{ inputs.arch }}
             FEATURES=${{ inputs.features }}
             VERSION=${{ env.version }}
-            APP_NAME=${{ inputs.app_name }}
-            APP_EXEC=${{ inputs.app_exec }}
+            APP_NAME=${{ matrix.app_name }}
+            APP_EXEC=${{ matrix.app_exec }}
           tags: |
-            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ inputs.image_name }}:${{ env.version }}
+            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.image_name }}:${{ env.version }}
             ${{ env.tag_alias }}
 
       - name: Image digest
