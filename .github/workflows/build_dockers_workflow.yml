@@ -72,8 +72,8 @@ jobs:
 
           echo $matrix
           echo $matrix | jq .
-          #echo "::set-output name=matrix::$matrix"
-          echo "matrix=${matrix}" >> $GITHUB_ENV
+          echo "::set-output name=matrix::$matrix"
+          #echo "matrix=${matrix}" >> $GITHUB_ENV
 
   docker_build:
     needs: envs_setup

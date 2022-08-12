@@ -58,7 +58,7 @@ jobs:
     uses: ./.github/workflows/build_dockers_workflow.yml
     secrets: inherit
     with:
-      toolchain: ${{ needs.envs_setup.outputs.toolchain }}
+      toolchain: ${{ needs.test_envs_setup.outputs.toolchain }}
       platforms: ${{ inputs.platforms }}
       version: ${{ inputs.version }}
       tag_alias: ${{ inputs.tag_alias }}
