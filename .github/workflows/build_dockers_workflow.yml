@@ -59,12 +59,26 @@ jobs:
           echo "Building with ${build_items}."
           if [ -z "${build_items}" ] || [ "${build_items}" = "tari_all" ] ; then
             echo "Build all tari images"
-            matrix_selection=$( jq -s -c .[] tari-launchpad/tarisuite.json )
+            matrix_selection=$( jq -s -c '.[]' tari-launchpad/tarisuite.json )
           elif [ "${build_items:0:5}" = "tari_" ] ; then
             echo "Build only selected tari images - ${build_items}"
             matrix_selection=$( jq --arg jsonVar "${build_items}" -r '[. []
               | select(."image_name"==$jsonVar)]' tari-launchpad/tarisuite.json )
+          elif [ "${build_items}" = "all" ] ; then
+            echo "Build all images"
+            matrix_selection=$( jq -c '. += input' tari-launchpad/tarisuite.json tari-launchpad/3rdparty.json )
+          elif [ "${build_items}" = "3rdparty" ] ; then
+            echo "Build only 3rdparty images - ${build_items}"
+            matrix_selection=$( jq -s -c '.[]' tari-launchpad/3rdparty.json )
+          else
+            echo "Build only selected 3rdparty images - ${build_items}"
+            matrix_selection=$( jq --arg jsonVar "${build_items}" -r '[. []
+              | select(."image_name"==$jsonVar)]' tari-launchpad/3rdparty.json )
+          #  "!! Broken selection? !!"
+          #  exit 1
           fi
+
+          # ToDo: Add error checking
 
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .[]}')
@@ -124,7 +138,21 @@ jobs:
             echo "Tari builds"
             mkdir -p tari/buildtools/docker_rig
             cp -v tari-launchpad/docker_rig/start_tari_app.sh tari/buildtools/docker_rig/start_tari_app.sh
-            echo "dockerfile=tarilabs" >> $GITHUB_ENV
+            echo "DOCKERFILE=tarilabs" >> $GITHUB_ENV
+            echo "APP_NAME=${{ matrix.builds.app_name }}" >> $GITHUB_ENV
+            echo "APP_EXEC=${{ matrix.builds.app_exec }}" >> $GITHUB_ENV
+          else
+            echo "3rd Party builds - ${IMAGE_NAME}"
+            if [ -f "./tari-launchpad/docker_rig/${IMAGE_NAME}.Dockerfile" ]; then
+              echo "DOCKERFILE=${IMAGE_NAME}" >> $GITHUB_ENV
+              SUBTAG=$(awk -v search="^ARG ${2^^}?_VERSION=" -F '=' '$0 ~ search \
+                { gsub(/["]/, "", $2); printf("%s",$2) }' \
+                "./tari-launchpad/docker_rig/${IMAGE_NAME}.Dockerfile")
+              # --build-arg ${2^^}_VERSION=${SUBTAG}
+            else
+              "!! No ${IMAGE_NAME}.Dockerfile file !!"
+              exit 1
+            fi
           fi
 
       - name: Login to Docker Image Provider
@@ -145,13 +173,13 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: ./tari/
-          file: ./tari-launchpad/docker_rig/${{ env.dockerfile }}.Dockerfile
+          file: ./tari-launchpad/docker_rig/${{ env.DOCKERFILE }}.Dockerfile
           platforms: ${{ inputs.platforms }}
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ env.version }}
+            VERSION=${{ env.VERSION }}
             ARCH=${{ inputs.arch }}
             FEATURES=${{ inputs.features }}
             APP_NAME=${{ matrix.builds.app_name }}
