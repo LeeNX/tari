@@ -151,7 +151,6 @@ jobs:
               echo "Docker subtag - ${SUBTAG}"
               echo "VERSION=${SUBTAG}_${VERSION}" >> $GITHUB_ENV
               echo "DOCKER_SUBTAG=--build-arg ${IMAGE_NAME^^}_VERSION=${SUBTAG}" >> $GITHUB_ENV
-
             else
               "!! ${IMAGE_NAME}.Dockerfile file not found !!"
               exit 1
