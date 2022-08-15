@@ -148,10 +148,12 @@ jobs:
               SUBTAG=$(awk -v search="^ARG ${IMAGE_NAME^^}?_VERSION=" -F '=' '$0 ~ search \
                 { gsub(/["]/, "", $2); printf("%s",$2) }' \
                 "./tari-launchpad/docker_rig/${IMAGE_NAME}.Dockerfile")
-            echo "DOCKER_SUBTAG=--build-arg ${IMAGE_NAME^^}_VERSION=${SUBTAG}" >> $GITHUB_ENV
+              echo "Docker subtag - ${SUBTAG}"
+              echo "VERSION=${SUBTAG}_${VERSION}" >> $GITHUB_ENV
+              echo "DOCKER_SUBTAG=--build-arg ${IMAGE_NAME^^}_VERSION=${SUBTAG}" >> $GITHUB_ENV
 
             else
-              "!! No ${IMAGE_NAME}.Dockerfile file !!"
+              "!! ${IMAGE_NAME}.Dockerfile file not found !!"
               exit 1
             fi
           fi
