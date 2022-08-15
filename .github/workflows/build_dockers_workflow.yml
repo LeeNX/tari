@@ -48,7 +48,7 @@ jobs:
         with:
           # repository: tari-project/tari-launchpad
           repository: leet4tari/tari-launchpad
-          ref: build-leet-tari-test-cache
+          ref: build-leet-tari-docker-cache
           path: tari-launchpad
 
       - name: Set Matrix
@@ -132,7 +132,7 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_ENV
           if [ ! -z "${{ inputs.tag_alias }}" ]; then
             echo "Setup tag_alias"
-            echo "tag_alias=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.builds.image_name }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
+            echo "TAG_ALIAS=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.builds.image_name }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
           fi
           if [ "${IMAGE_NAME:0:5}" = "tari_" ] ; then
             echo "Tari builds"
@@ -145,10 +145,11 @@ jobs:
             echo "3rd Party builds - ${IMAGE_NAME}"
             if [ -f "./tari-launchpad/docker_rig/${IMAGE_NAME}.Dockerfile" ]; then
               echo "DOCKERFILE=${IMAGE_NAME}" >> $GITHUB_ENV
-              SUBTAG=$(awk -v search="^ARG ${2^^}?_VERSION=" -F '=' '$0 ~ search \
+              SUBTAG=$(awk -v search="^ARG ${IMAGE_NAME^^}?_VERSION=" -F '=' '$0 ~ search \
                 { gsub(/["]/, "", $2); printf("%s",$2) }' \
                 "./tari-launchpad/docker_rig/${IMAGE_NAME}.Dockerfile")
-              # --build-arg ${2^^}_VERSION=${SUBTAG}
+            echo "DOCKER_SUBTAG=--build-arg ${IMAGE_NAME^^}_VERSION=${SUBTAG}" >> $GITHUB_ENV
+
             else
               "!! No ${IMAGE_NAME}.Dockerfile file !!"
               exit 1
@@ -184,9 +185,10 @@ jobs:
             FEATURES=${{ inputs.features }}
             APP_NAME=${{ matrix.builds.app_name }}
             APP_EXEC=${{ matrix.builds.app_exec }}
+            ${{ env.DOCKER_SUBTAG }}
           tags: |
-            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.builds.image_name }}:${{ env.version }}
-            ${{ env.tag_alias }}
+            ${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.builds.image_name }}:${{ env.VERSION }}
+            ${{ env.TAG_ALIAS }}
 
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
