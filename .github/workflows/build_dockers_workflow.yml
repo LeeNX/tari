@@ -129,7 +129,7 @@ jobs:
             VERSION=${{ inputs.version }}
           fi
           echo "Setting ${VERSION} as docker tag"
-          echo "version=${VERSION}" >> $GITHUB_ENV
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
           if [ ! -z "${{ inputs.tag_alias }}" ]; then
             echo "Setup tag_alias"
             echo "TAG_ALIAS=${{ secrets.DOCKER_PROVIDER }}/${{ secrets.DOCKER_REPO }}/${{ matrix.builds.image_name }}:${{ inputs.tag_alias }}" >> $GITHUB_ENV
