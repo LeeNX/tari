@@ -190,8 +190,7 @@ jobs:
         if: ${{ matrix.builds.name == 'linux-arm64' }}
         shell: bash
         run: |
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "Test"
 
       - name: Build rust binaries
         uses: actions-rs/cargo@v1
