@@ -48,6 +48,14 @@ jobs:
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v1
 
+      - name: Debugging wallet.h
+        shell: bash
+        run: |
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+          mv -v "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h" \
+            "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h.bak"
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+
       - name: Build libwallet libraries
         uses: actions-rs/cargo@v1
         env:
@@ -75,7 +83,7 @@ jobs:
             "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.a" \
             "libwallet-android-${target_platform}/wallet.h" \
               > "libwallet-android-${target_platform}/libtari_wallet_ffi.${target_platform}.sha256sums"
-          ls -alht "${{ runner.temp }}/libwallet-android-${target_platform}"
+          ls -al "${{ runner.temp }}/libwallet-android-${target_platform}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -117,6 +125,14 @@ jobs:
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v1
 
+      - name: Debugging wallet.h
+        shell: bash
+        run: |
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+          mv -v "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h" \
+            "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h.bak"
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+
       - name: Build libwallet libraries
         run: |
           mkdir -p MobileWallet/TariLib/
@@ -132,7 +148,7 @@ jobs:
             "libwallet-ios/libtari_wallet_ffi.a" \
             "libwallet-ios/wallet.h" \
               > "libwallet-ios/libtari_wallet_ffi.sha256sums"
-          ls -alht "${{ runner.temp }}/libwallet-ios"
+          ls -al "${{ runner.temp }}/libwallet-ios"
 
       - name: Debugging - Upload logs if build failures
         if: failure()
