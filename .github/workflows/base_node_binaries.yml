@@ -42,8 +42,11 @@ jobs:
           # build only single target image
           # matrix_selection=$( jq -c '.[] | select( ."name" == "windows-x64" )' ${{ env.matrix-json-file }} )
           #
+          # build from wildcard target
+          matrix_selection=$( jq -c '.[] | select( ."name" | contains("linux") )' ${{ env.matrix-json-file }} )
+          #
           # buid select target images - build_enabled
-          matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
+          #matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
@@ -183,24 +186,18 @@ jobs:
         uses: Swatinem/rust-cache@v1
 
         # Fix me soon!
-      - name: Build rust binaries - hardcoded (linux-arm64)
+      - name: Envs override - hardcoded (linux-arm64)
         if: ${{ matrix.builds.name == 'linux-arm64' }}
         shell: bash
         run: |
-          export RUSTFLAGS="-C target_cpu=generic"
-          export ROARING_ARCH=generic
-          export BUILD_TARGET="aarch64-unknown-linux-gnu/"
-          export RUST_TARGET="--target=aarch64-unknown-linux-gnu"
-          export ARCH=generic
-          export FEATURES=safe
-          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-          export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-          export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
-          export BINDGEN_EXTRA_CLANG_ARGS="--sysroot /usr/aarch64-linux-gnu/include/"
-          cargo build --release --target ${{ matrix.builds.target }} --features ${{ matrix.builds.features }} ${{ matrix.builds.target_bins }}
+          echo "BUILD_TARGET='aarch64-unknown-linux-gnu/'" >> $GITHUB_ENV
+          echo "RUST_TARGET='--target=aarch64-unknown-linux-gnu'" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "BINDGEN_EXTRA_CLANG_ARGS='--sysroot /usr/aarch64-linux-gnu/include/'" >> $GITHUB_ENV
 
-      - name: Build rust binaries - Normal
-        if: ${{ matrix.builds.name != 'linux-arm64' }}
+      - name: Build rust binaries
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: "-C target_cpu=${{ matrix.builds.target_cpu }}"
@@ -229,7 +226,6 @@ jobs:
             "tari_console_wallet"
             "tari_miner"
             "tari_merge_mining_proxy"
-            "tari_validator_node"
           )
           for FILE in "${FILES[@]}"; do
             if [ -f "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/${FILE}${TBN_EXT}" ]; then
@@ -274,7 +270,6 @@ jobs:
             "tari_console_wallet"
             "tari_miner"
             "tari_merge_mining_proxy"
-            "tari_validator_node"
           )
           for FILE in "${FILES[@]}"; do
             codesign --options runtime --force --verify --verbose --timestamp --sign "Developer ID Application: $MACOS_APPLICATION_ID" "/tmp/tari_testnet/runtime/$FILE"
