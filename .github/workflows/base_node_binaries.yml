@@ -191,7 +191,7 @@ jobs:
         if: ${{ matrix.builds.name == 'linux-arm64' }}
         shell: bash
         run: |
-          echo "BINDGEN_EXTRA_CLANG_ARGS=--sysroot\ /usr/aarch64-linux-gnu/include/" >> $GITHUB_ENV
+          echo 'BINDGEN_EXTRA_CLANG_ARGS=--sysroot /usr/aarch64-linux-gnu/include/' >> $GITHUB_ENV
           echo "BUILD_TARGET=aarch64-unknown-linux-gnu/" >> $GITHUB_ENV
           echo "RUST_TARGET=--target=aarch64-unknown-linux-gnu" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
