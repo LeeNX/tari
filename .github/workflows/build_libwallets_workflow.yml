@@ -49,12 +49,13 @@ jobs:
         uses: Swatinem/rust-cache@v1
 
       - name: Debugging wallet.h
+        continue-on-error: true
         shell: bash
         run: |
-          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h"*
           mv -v "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h" \
             "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h.bak"
-          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h"*
 
       - name: Build libwallet libraries
         uses: actions-rs/cargo@v1
@@ -126,12 +127,13 @@ jobs:
         uses: Swatinem/rust-cache@v1
 
       - name: Debugging wallet.h
+        continue-on-error: true
         shell: bash
         run: |
-          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h"*
           mv -v "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h" \
             "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h.bak"
-          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h*"
+          ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h"*
 
       - name: Build libwallet libraries
         run: |
