@@ -1,7 +1,7 @@
 ---
 name: Build docker images
 
-on:
+'on':
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
@@ -25,24 +25,24 @@ on:
         description: 'docker platform(s)'
         type: choice
         options:
-        - linux/amd64
-        - linux/arm64
-        - linux/arm64, linux/amd64
+          - linux/amd64
+          - linux/arm64
+          - linux/arm64, linux/amd64
       build_items:
         default: tari_all
         description: 'image(s) to build'
         type: choice
         options:
-        - all
-        - tari_all
-        - tari_base_node
-        - tari_wallet
-        - tari_mm_proxy
-        - tari_sha3_miner
-        - 3rdparty_all
-        - tor
-        - monerod
-        - xmrig
+          - all
+          - tari_all
+          - tari_base_node
+          - tari_wallet
+          - tari_mm_proxy
+          - tari_sha3_miner
+          - 3rdparty_all
+          - tor
+          - monerod
+          - xmrig
 
 env:
   toolchain_default: nightly-2022-05-01
