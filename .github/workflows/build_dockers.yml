@@ -69,18 +69,18 @@ jobs:
           echo "::set-output name=toolchain::${TOOLCHAIN:-${{ env.toolchain_default }}}"
           if [ "${{ github.event_name }}" == "schedule" ] && [ "${{ github.event.schedule }}" == "05 00 * * *" ] ; then
             echo "Daily Build"
-            echo "::set-output name=platforms::'linux/arm64, linux/amd64'"
-            echo "::set-output name=tag_alias::'latest-daily'}"
-            echo "::set-output name=build_items::'tari_all'"
+            echo "::set-output name=platforms::linux/arm64, linux/amd64"
+            echo "::set-output name=tag_alias::latest-daily"
+            echo "::set-output name=build_items::tari_all"
           fi
           if [[ "${{ github.ref }}" =~ ^refs/tags/v* ]] && [ "${{ github.event_name }}" != "workflow_dispatch" ] ; then
             echo "Tagged Build - Build everything"
             echo "VSHA_SHORT=$(echo ${GITHUB_SHA::7})" >> $GITHUB_ENV
             VERSION=${{ github.ref_name }}_$(date -u '+%Y%m%d')_${VSHA_SHORT}
-            echo "::set-output name=platforms::'linux/arm64, linux/amd64'"
+            echo "::set-output name=platforms::linux/arm64, linux/amd64"
             echo "::set-output name=version::${VERSION}"
-            echo "::set-output name=tag_alias::'latest'"
-            echo "::set-output name=build_items::'all'"
+            echo "::set-output name=tag_alias::latest"
+            echo "::set-output name=build_items::all"
           else
             echo "::set-output name=platforms::${{ github.event.inputs.platforms }}"
             echo "::set-output name=version::${{ github.event.inputs.version }}"
