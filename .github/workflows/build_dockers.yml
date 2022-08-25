@@ -67,7 +67,9 @@ jobs:
           echo "::set-output name=toolchain::${TOOLCHAIN:-${{ env.toolchain_default }}}"
           if [ "${{ github.event_name }}" == "schedule" ] && [ "${{ github.event.schedule }}" == "05 00 * * *" ] ; then
             echo "Daily Build"
+            echo "::set-output name=platforms::'linux/arm64, linux/amd64'"
             echo "::set-output name=tag_alias::'latest-daily'}"
+            echo "::set-output name=build_items::'tari_all'"
           fi
           if [[ "${{ github.ref }}" =~ ^refs/tags/v* ]] && [ "${{ github.event_name }}" != "workflow_dispatch" ] ; then
             echo "Tagged Build - Build everything"
