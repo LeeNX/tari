@@ -48,6 +48,7 @@ jobs:
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v1
 
+<<<<<<< HEAD
       - name: Debugging wallet.h
         continue-on-error: true
         shell: bash
@@ -57,6 +58,8 @@ jobs:
             "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h.bak"
           ls -al "$GITHUB_WORKSPACE/base_layer/wallet_ffi/wallet.h"*
 
+=======
+>>>>>>> 501f550e8ff07d20b4544f9af233d33ba7fb2fc8
       - name: Build libwallet libraries
         uses: actions-rs/cargo@v1
         env:
