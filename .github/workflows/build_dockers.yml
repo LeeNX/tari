@@ -64,7 +64,11 @@ jobs:
         id: envs_setup
         shell: bash
         run: |
-          echo "Workflow triggered by ${{ github.actor }}"
+          echo "Workflow triggered by ${{ github.actor }} for ${{ github.event_name }}"
+          echo "SHA - ${GITHUB_SHA}"
+          VSHA_SHORT=$(echo ${GITHUB_SHA::7})
+          echo "SHA short - ${VSHA_SHORT}"
+          echo "VSHA_SHORT=${VSHA_SHORT}" >> $GITHUB_ENV
           TOOLCHAIN=${{ github.event.inputs.toolchain }}
           echo "::set-output name=toolchain::${TOOLCHAIN:-${{ env.toolchain_default }}}"
           if [ "${{ github.event_name }}" == "schedule" ] && [ "${{ github.event.schedule }}" == "05 00 * * *" ] ; then
