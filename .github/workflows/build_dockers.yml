@@ -68,15 +68,11 @@ jobs:
           if [ "${{ github.event_name }}" == "schedule" ] && [ "${{ github.event.schedule }}" == "05 00 * * *" ] ; then
             echo "Daily Build"
             echo "::set-output name=tag_alias::'latest-daily'}"
-          else
-            TAG_ALIAS=${{ github.event.inputs.tag_alias }}
-            echo "::set-output name=tag_alias::${TAG_ALIAS}"
-            echo "event name: ${{ github.event_name }}"
           fi
           if [[ "${{ github.ref }}" =~ ^refs/tags/v* ]] && [ "${{ github.event_name }}" != "workflow_dispatch" ] ; then
             echo "Tagged Build - Build everything"
             echo "VSHA_SHORT=$(echo ${GITHUB_SHA::7})" >> $GITHUB_ENV
-            VERSION=${{ github.event.ref }}_$(date -u '+%Y%m%d')_${VSHA_SHORT}
+            VERSION=${{ github.ref_name }}_$(date -u '+%Y%m%d')_${VSHA_SHORT}
             echo "::set-output name=platforms::'linux/arm64, linux/amd64'"
             echo "::set-output name=version::${VERSION}"
             echo "::set-output name=tag_alias::'latest'"
