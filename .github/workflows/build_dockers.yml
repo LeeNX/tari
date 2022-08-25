@@ -3,12 +3,16 @@ name: Build docker images
 
 'on':
   push:
+    paths-ignore:
+      - '**/*.md'
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
+      - 'v[0-9]+.[0-9]+.[0-9]*'
+    tags-ignore:
+      -
     branches:
-      - "build_dockers*"
+      - 'build_dockers*'
   schedule:
-    - cron: "05 00 * * *"
+    - cron: '05 00 * * *'
   workflow_dispatch:
     inputs:
 #      toolchain:
