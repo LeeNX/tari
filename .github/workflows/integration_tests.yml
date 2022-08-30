@@ -15,7 +15,7 @@ env:
 
 jobs:
   builds_run:
-  uses: ./.github/workflows/build_binaries_workflow.yml
+    uses: ./.github/workflows/build_binaries_workflow.yml
 
   integration:
     name: integration
