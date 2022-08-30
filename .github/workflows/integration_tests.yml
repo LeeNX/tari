@@ -19,6 +19,7 @@ jobs:
 
   integration:
     name: integration
+    needs: builds_run
     runs-on: ubuntu-latest
     steps:
       - name: npm ci and lint

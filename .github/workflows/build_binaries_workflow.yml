@@ -26,7 +26,7 @@ env:
 
 jobs:
   build_binaries:
-    name: Build Android
+    name: Build Binaries
     strategy:
       fail-fast: false
 
@@ -84,8 +84,9 @@ jobs:
       - name: Debug target notes
         shell: bash
         run: |
-          rustc --target=${{ inputs.toolchain }} --print target-cpus
-          rustc --target=${{ inputs.toolchain }} --print target-features
+          rustc --target=${{ inputs.target_platform }} --print target-cpus
+          rustc --target=${{ inputs.target_platform }} --print target-features
+          rustc --print target-list
 
       - name: Build rust binaries - Normal
         uses: actions-rs/cargo@v1
