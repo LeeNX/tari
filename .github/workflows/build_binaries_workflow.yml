@@ -104,8 +104,13 @@ jobs:
             --features ${{ inputs.target_features }}
             ${{ env.TARGET_BINS }}
 
+      - name: Debug target build
+        shell: bash
+        run: |
+          ls -la $GITHUB_WORKSPACE/target
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.TBN_FILENAME }}_archive-${{ env.target_platform }}
-          path: $GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/${{ inputs.build_binaries }}
+          path: $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release/${{ inputs.build_binaries }}
