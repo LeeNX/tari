@@ -54,6 +54,7 @@ jobs:
             integration_tests/temp/reports
 
       - name: run ffi wallet cucumber scenarios
+        if: ${{ inputs.tests_ffi == 'true' }}
         shell: bash
         working-directory: integration_tests
         run: |
@@ -61,6 +62,7 @@ jobs:
           node_modules/.bin/cucumber-js --tags "not @long-running and not @broken and not @flaky and @wallet-ffi" --format json:cucumber_output/tests_ffi.cucumber --exit
 
       - name: generate ffi report
+        if: ${{ inputs.tests_ffi == 'true' }}
         shell: bash
         working-directory: integration_tests
         run: |
