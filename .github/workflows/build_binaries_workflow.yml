@@ -1,0 +1,109 @@
+---
+name: Build binaries - workflow_call/on-demand
+
+'on':
+  workflow_call:
+    inputs:
+      build_binaries:
+        type: string
+        default: 'tari_miner'
+      target_platform:
+        type: string
+        default: 'x86_64-unknown-linux-gnu'
+      target_cpu:
+        type: string
+        default: 'native'
+      target_feature:
+        type: string
+        default: '+avx2'
+      toolchain:
+        type: string
+        description: 'Rust toolchain'
+        default: 'nightly-2022-05-01'
+
+env:
+  TBN_FILENAME: "tari_suite"
+
+jobs:
+  build_binaries:
+    name: Build Android
+    strategy:
+      fail-fast: false
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: envs setup
+        id: envs_setup
+        shell: bash
+        run: |
+          echo "Workflow triggered by ${{ github.actor }} for ${{ github.event_name }}"
+          echo "SHA - ${GITHUB_SHA}"
+          VSHA_SHORT=$(echo ${GITHUB_SHA::7})
+          echo "SHA short - ${VSHA_SHORT}"
+          echo "VSHA_SHORT=${VSHA_SHORT}" >> $GITHUB_ENV
+          echo "VBRANCH=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
+          # build_binaries
+          echo "TARGET_BINS=--bin ${{ inputs.build_binaries }}" >> $GITHUB_ENV
+          #cargo build --release --package tari_wallet_ffi
+
+      - name: Install Linux dependencies - Ubuntu
+        if: ${{ startsWith(runner.os,'Linux') && matrix.builds.name != 'linux-arm64' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install \
+            openssl \
+            libssl-dev \
+            pkg-config \
+            libsqlite3-dev \
+            clang-10 \
+            git \
+            cmake \
+            libc++-dev \
+            libc++abi-dev \
+            libprotobuf-dev \
+            protobuf-compiler \
+            libncurses5-dev \
+            libncursesw5-dev \
+            zip
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+          toolchain: ${{ inputs.toolchain }}
+          override: true
+
+      - name: Cache cargo files and outputs
+        uses: Swatinem/rust-cache@v1
+
+      - name: Debug target notes
+        shell: bash
+        run: |
+          rustc --target=${{ inputs.toolchain }} --print target-cpus
+          rustc --target=${{ inputs.toolchain }} --print target-features
+
+      - name: Build rust binaries - Normal
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTFLAGS: "-C target_cpu=${{ inputs.target_cpu }}"
+          ROARING_ARCH: "${{ inputs.target_cpu }}"
+        with:
+          use-cross: false
+          command: build
+          args: >
+            --release
+            --locked
+            --target ${{ inputs.target_platform }}
+            --features ${{ inputs.target_features }}
+            ${{ env.TARGET_BINS }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.TBN_FILENAME }}_archive-${{ env.target_platform }}
+          path: $GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/${{ inputs.build_binaries }}
