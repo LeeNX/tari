@@ -22,6 +22,9 @@ jobs:
     needs: builds_run
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
       - name: npm ci and lint
         shell: bash
         working-directory: integration_tests
