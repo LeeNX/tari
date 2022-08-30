@@ -108,6 +108,8 @@ jobs:
         shell: bash
         run: |
           ls -la $GITHUB_WORKSPACE/target
+          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}
+          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
