@@ -1,8 +1,12 @@
 ---
-name: CI
+name: Integration testing
 
-on:
+'on':
   push:
+    paths-ignore:
+      - '**/*.md'
+    branches:
+      - 'leet-integration_tests*'
   pull_request:
     types: [opened]
 
@@ -10,69 +14,55 @@ env:
   toolchain: nightly-2022-05-01
 
 jobs:
+  builds_run:
+  uses: ./.github/workflows/build_binaries_workflow.yml
+
   integration:
     name: integration
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: cache
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-build-release-${{ hashFiles('**/Cargo.lock') }}
-      - name: toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ env.toolchain }}
-          components: clippy, rustfmt
-          override: true
-      - name: dependencies
-        run: |
-          sudo apt-get update && \
-          sudo apt-get -y install \
-            libssl-dev \
-            clang-10 \
-            pkg-config \
-            git \
-            cmake \
-            zip \
-            libc++-dev \
-            libc++abi-dev \
-            libprotobuf-dev \
-            protobuf-compiler
       - name: npm ci and lint
+        shell: bash
+        working-directory: integration_tests
         run: |
           node -v
-          cd integration_tests
           npm ci
           npm run check-fmt
           npm run lint
-      - name: build
-        run: |
-          cargo build --release --bin tari_base_node
-          cargo build --release --bin tari_console_wallet
-          cargo build --release --bin tari_merge_mining_proxy
-          cargo build --release --bin tari_miner
-          cargo build --release --package tari_wallet_ffi
+
       - name: run cucumber scenarios
+        shell: bash
+        working-directory: integration_tests
         run: |
-          cd integration_tests
           mkdir -p cucumber_output
           node_modules/.bin/cucumber-js --tags "not @long-running and not @broken and not @wallet-ffi" --format json:cucumber_output/tests.cucumber --exit --retry 2 --retryTagFilter "@flaky and not @broken"
+
       - name: generate report
+        if: always()
+        shell: bash
+        working-directory: integration_tests
         run: |
-          cd integration_tests
           node ./generate_report.js
+
+      - name: store test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test results
+          path: |
+            integration_tests/cucumber_output
+            integration_tests/temp/reports
+
       - name: run ffi wallet cucumber scenarios
+        shell: bash
+        working-directory: integration_tests
         run: |
-          cd integration_tests
           mkdir -p cucumber_output
           node_modules/.bin/cucumber-js --tags "not @long-running and not @broken and not @flaky and @wallet-ffi" --format json:cucumber_output/tests_ffi.cucumber --exit
+
       - name: generate ffi report
+        shell: bash
+        working-directory: integration_tests
         run: |
           cd integration_tests
           node ./generate_report.js "cucumber_output/tests_ffi.cucumber" "temp/reports/cucumber_ffi_report.html"
