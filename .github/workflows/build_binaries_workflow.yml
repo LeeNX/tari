@@ -13,7 +13,7 @@ name: Build binaries - workflow_call/on-demand
       target_cpu:
         type: string
         default: 'native'
-      target_feature:
+      target_features:
         type: string
         default: '+avx2'
       toolchain:
