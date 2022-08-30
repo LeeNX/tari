@@ -39,7 +39,9 @@ jobs:
         working-directory: integration_tests
         run: |
           mkdir -p cucumber_output
-          node_modules/.bin/cucumber-js --tags "not @long-running and not @broken and not @wallet-ffi" --format json:cucumber_output/tests.cucumber --exit --retry 2 --retryTagFilter "@flaky and not @broken"
+          node_modules/.bin/cucumber-js --profile "ci" --tags "not @wallet-ffi" \
+            --format json:cucumber_output/tests.cucumber --exit \
+            --retry 2 --retry-tag-filter "@flaky and not @broken"
 
       - name: generate report
         if: always()
