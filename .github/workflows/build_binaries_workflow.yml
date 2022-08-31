@@ -55,9 +55,9 @@ jobs:
           #cargo build --release --package tari_wallet_ffi
           VAPPS_STRING="${{ inputs.build_binaries }}"
           VAPPS_ARRAY=(${VAPPS_STRING})
-          for i in "${!APPS_ARRAY[@]}"; do
-            echo "element $i is ${APPS_ARRAY[$i]}"
-            VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${APPS_ARRAY[$i]}"
+          for i in "${!VAPPS_ARRAY[@]}"; do
+            echo "element $i is ${VAPPS_ARRAY[$i]}"
+            VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
           done
           echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
           echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
@@ -125,5 +125,5 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ env.TBN_FILENAME }}_archive-${{ env.target_platform }}
-          path: $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release/tari_*
+          name: ${{ env.TBN_FILENAME }}_archive-${{ inputs.target_platform }}
+          path: ${{ env.GITHUB_WORKSPACE }}/target/${{ inputs.target_platform }}/release/tari_*
