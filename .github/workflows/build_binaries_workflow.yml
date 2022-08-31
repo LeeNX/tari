@@ -94,8 +94,24 @@ jobs:
           toolchain: ${{ inputs.toolchain }}
           override: true
 
+      - name: Debug target build
+        shell: bash
+        run: |
+          ls -la $GITHUB_WORKSPACE/target
+          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}
+          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release
+          du -ch $GITHUB_WORKSPACE/target
+
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v1
+
+      - name: Debug target build
+        shell: bash
+        run: |
+          ls -la $GITHUB_WORKSPACE/target
+          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}
+          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release
+          du -ch $GITHUB_WORKSPACE/target
 
       - name: Debug target notes
         shell: bash
