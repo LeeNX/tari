@@ -8,7 +8,7 @@ name: Build binaries - workflow_call/on-demand
         type: string
         # found in applications
         # Space seperated
-        # tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner
+        # tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner tari_wallet_ffi
         default: 'tari_miner'
       target_platform:
         type: string
@@ -57,7 +57,11 @@ jobs:
           VAPPS_ARRAY=(${VAPPS_STRING})
           for i in "${!VAPPS_ARRAY[@]}"; do
             echo "element $i is ${VAPPS_ARRAY[$i]}"
-            VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
+            if [ "${VAPPS_ARRAY[$i]}" = "tari_wallet_ffi" ] ; then
+              VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --package ${VAPPS_ARRAY[$i]}"
+            elif [ "${VAPPS_ARRAY[$i]:0:5}" = "tari_" ] ; then
+              VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
+            fi
           done
           echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
           echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
@@ -121,9 +125,10 @@ jobs:
           ls -la $GITHUB_WORKSPACE/target
           ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}
           ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release
+          du -ch $GITHUB_WORKSPACE/target
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.TBN_FILENAME }}_archive-${{ inputs.target_platform }}
-          path: ${{ env.GITHUB_WORKSPACE }}/target/${{ inputs.target_platform }}/release/tari_*
+          path: ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*
