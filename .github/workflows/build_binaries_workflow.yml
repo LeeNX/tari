@@ -152,5 +152,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.TBN_FILENAME }}_archive-${{ inputs.target_platform }}
-          path: ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*
-          path: !${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*.d
+          path: |
+            ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*
+            !${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*.d
