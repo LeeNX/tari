@@ -68,7 +68,9 @@ jobs:
         run: |
           mkdir -p cucumber_output
           mkdir -p temp/out
-          cp -v $GITHUB_WORKSPACE/target/x86_64-unknown-linux-gnu/release/tari_* temp/out/
+          if [ -f "$GITHUB_WORKSPACE/target/x86_64-unknown-linux-gnu/release/tari_*" ]; then
+            cp -v "$GITHUB_WORKSPACE/target/x86_64-unknown-linux-gnu/release/tari_*" temp/out/
+          fi
           node_modules/.bin/cucumber-js --profile "ci" --tags "not @wallet-ffi" \
             --format json:cucumber_output/tests.cucumber --exit \
             --retry 2 --retry-tag-filter "@flaky and not @broken"
