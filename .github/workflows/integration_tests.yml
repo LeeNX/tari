@@ -55,11 +55,19 @@ jobs:
           du -sh $GITHUB_WORKSPACE/target
 
       - name: run cucumber scenarios
-        timeout-minutes: 30
+        timeout-minutes: 90
         shell: bash
         working-directory: integration_tests
+        env:
+          RUSTFLAGS: "-C target_cpu=native"
+          ROARING_ARCH: "native"
+          CARGO_BUILD_TARGET: x86_64-unknown-linux-gnu
+          CARGO_INCREMENTAL: 1
+          CARGO_BUILD_INCREMENTAL: 1
         run: |
           mkdir -p cucumber_output
+          mkdir -p temp/out
+          cp -v $GITHUB_WORKSPACE/target/x86_64-unknown-linux-gnu/release/tari_* temp/out/
           node_modules/.bin/cucumber-js --profile "ci" --tags "not @wallet-ffi" \
             --format json:cucumber_output/tests.cucumber --exit \
             --retry 2 --retry-tag-filter "@flaky and not @broken"
