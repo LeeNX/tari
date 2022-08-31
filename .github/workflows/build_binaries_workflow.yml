@@ -6,6 +6,9 @@ name: Build binaries - workflow_call/on-demand
     inputs:
       build_binaries:
         type: string
+        # found in applications
+        # Space seperated
+        # tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner
         default: 'tari_miner'
       target_platform:
         type: string
@@ -48,8 +51,16 @@ jobs:
           echo "VSHA_SHORT=${VSHA_SHORT}" >> $GITHUB_ENV
           echo "VBRANCH=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
           # build_binaries
-          echo "TARGET_BINS=--bin ${{ inputs.build_binaries }}" >> $GITHUB_ENV
+          #echo "TARGET_BINS=--bin ${{ inputs.build_binaries }}" >> $GITHUB_ENV
           #cargo build --release --package tari_wallet_ffi
+          VAPPS_STRING="${{ inputs.build_binaries }}"
+          VAPPS_ARRAY=(${VAPPS_STRING})
+          for i in "${!APPS_ARRAY[@]}"; do
+            echo "element $i is ${APPS_ARRAY[$i]}"
+            VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${APPS_ARRAY[$i]}"
+          done
+          echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
+          echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
 
       - name: Install Linux dependencies - Ubuntu
         if: ${{ startsWith(runner.os,'Linux') && matrix.builds.name != 'linux-arm64' }}
@@ -115,4 +126,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.TBN_FILENAME }}_archive-${{ env.target_platform }}
-          path: $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release/${{ inputs.build_binaries }}
+          path: $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release/tari_*

@@ -16,6 +16,8 @@ env:
 jobs:
   builds_run:
     uses: ./.github/workflows/build_binaries_workflow.yml
+    with:
+      build_binaries: "tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner"
 
   integration:
     name: integration
