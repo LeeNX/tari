@@ -106,6 +106,7 @@ jobs:
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: "tari-binaries-builds"
           env-vars: ""
 
       - name: Debug target build
@@ -152,3 +153,4 @@ jobs:
         with:
           name: ${{ env.TBN_FILENAME }}_archive-${{ inputs.target_platform }}
           path: ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*
+          path: !${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*.d

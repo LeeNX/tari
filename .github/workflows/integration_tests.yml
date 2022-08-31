@@ -44,6 +44,7 @@ jobs:
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: "tari-binaries-builds"
           env-vars: ""
 
       - name: Debug target build
