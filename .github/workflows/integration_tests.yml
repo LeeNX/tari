@@ -12,21 +12,17 @@ name: Integration testing
 
 env:
   toolchain: nightly-2022-05-01
+  tests_ffi: 'true'
 
 jobs:
-  builds_ffi:
-    uses: ./.github/workflows/build_binaries_workflow.yml
-    with:
-      build_binaries: "tari_wallet_ffi"
-
   builds_bins:
     uses: ./.github/workflows/build_binaries_workflow.yml
     with:
-      build_binaries: "tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner"
+      build_binaries: "tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner tari_wallet_ffi"
 
   integration:
     name: integration
-    needs: [builds_ffi, builds_bins]
+    needs: builds_bins
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
@@ -49,7 +45,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "tari-binaries-builds"
-          # env-vars: ""
+          env-vars: ""
 
       - name: Debug target build
         continue-on-error: true
@@ -68,7 +64,8 @@ jobs:
         shell: bash
         working-directory: integration_tests
         env:
-          RUSTFLAGS: "-C target_cpu=native -C target-feature=+avx2"
+          RUSTFLAGS: "-C target_cpu=native"
+        #  RUSTFLAGS: "-C target_cpu=native -C target-feature=+avx2"
           ROARING_ARCH: "native"
           CARGO_BUILD_TARGET: x86_64-unknown-linux-gnu
         #  CARGO_INCREMENTAL: 1
@@ -84,12 +81,19 @@ jobs:
         shell: bash
         working-directory: integration_tests
         run: |
-          node ./generate_report.js
+          if [ -f cucumber_output/tests.cucumber ] ; then
+            node ./generate_report.js
+          fi
 
       - name: run ffi wallet cucumber scenarios
-        if: ${{ inputs.tests_ffi == 'true' }}
+        if: ${{ env.tests_ffi == 'true' }}
+        timeout-minutes: 90
         shell: bash
         working-directory: integration_tests
+        env:
+          RUSTFLAGS: "-C target_cpu=native"
+          ROARING_ARCH: "native"
+          CARGO_BUILD_TARGET: x86_64-unknown-linux-gnu
         run: |
           mkdir -p cucumber_output
           node_modules/.bin/cucumber-js --profile "ci"  --tags "@wallet-ffi" \
@@ -97,12 +101,15 @@ jobs:
             --retry 2 --retry-tag-filter "@flaky and not @broken" || exit 1
 
       - name: generate ffi report
-        if: ${{ inputs.tests_ffi == 'true' }}
+        # if: ${{ env.tests_ffi == 'true' }}
+        if: always()
         shell: bash
         working-directory: integration_tests
         run: |
-          node ./generate_report.js "cucumber_output/tests_ffi.cucumber" \
-            "temp/reports/cucumber_ffi_report.html"
+          if [ -f "cucumber_output/tests_ffi.cucumber" ] ; then
+            node ./generate_report.js "cucumber_output/tests_ffi.cucumber" \
+              "temp/reports/cucumber_ffi_report.html"
+          fi
 
       - name: store test results and bins
         uses: actions/upload-artifact@v3

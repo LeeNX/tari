@@ -63,7 +63,7 @@ jobs:
           done
           echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
           echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
-          echo "TARGET_FEATURES=${VAPPS_TARGET_FEATURES}" >> $GITHUB_ENV
+          # echo "TARGET_FEATURES=${VAPPS_TARGET_FEATURES}" >> $GITHUB_ENV
 
       - name: Install Linux dependencies - Ubuntu
         if: ${{ startsWith(runner.os,'Linux') && matrix.builds.name != 'linux-arm64' }}
@@ -93,20 +93,11 @@ jobs:
           toolchain: ${{ inputs.toolchain }}
           override: true
 
-      - name: Debug target build
-        continue-on-error: true
-        shell: bash
-        run: |
-          ls -la $GITHUB_WORKSPACE/target
-          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}
-          ls -la $GITHUB_WORKSPACE/target/${{ inputs.target_platform }}/release
-          du -sh $GITHUB_WORKSPACE/target
-
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "tari-binaries-builds"
-          # env-vars: ""
+          env-vars: ""
 
       - name: Debug target build
         continue-on-error: true
@@ -124,7 +115,7 @@ jobs:
           rustc --target=${{ inputs.target_platform }} --print target-features
           rustc --print target-list
 
-      - name: Build rust binaries - Normal
+      - name: Build rust binaries
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: "-C target_cpu=${{ inputs.target_cpu }}"
@@ -137,7 +128,7 @@ jobs:
             --locked
             --target ${{ inputs.target_platform }}
             ${{ env.TARGET_BINS }}
-            ${{ env.TARGET_FEATURES }}
+            # ${{ env.TARGET_FEATURES }}
 
       - name: Debug target build
         shell: bash
