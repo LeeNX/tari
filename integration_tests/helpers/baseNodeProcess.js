@@ -70,6 +70,7 @@ class BaseNodeProcess {
       await this.runCommand("cargo", [
         "build",
         "--release",
+        "--locked",
         "--bin",
         "tari_base_node",
         "-Z",

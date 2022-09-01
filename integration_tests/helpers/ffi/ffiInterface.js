@@ -34,6 +34,7 @@ class InterfaceFFI {
       const args = [
         "build",
         "--release",
+        "--locked",
         "--package",
         "tari_wallet_ffi",
         "-Z",

@@ -55,7 +55,7 @@ jobs:
           for i in "${!VAPPS_ARRAY[@]}"; do
             echo "element $i is ${VAPPS_ARRAY[$i]}"
             if [ "${VAPPS_ARRAY[$i]}" = "tari_wallet_ffi" ] ; then
-              VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --package ${VAPPS_ARRAY[$i]}"
+              VAPPS_TARGET_FFI="--package tari_wallet_ffi"
             elif [ "${VAPPS_ARRAY[$i]:0:5}" = "tari_" ] ; then
               VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
               VAPPS_TARGET_FEATURES="--features ${{ inputs.target_features }}"
@@ -63,7 +63,8 @@ jobs:
           done
           echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
           echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
-          # echo "TARGET_FEATURES=${VAPPS_TARGET_FEATURES}" >> $GITHUB_ENV
+          echo "TARGET_FEATURES=${VAPPS_TARGET_FEATURES}" >> $GITHUB_ENV
+          echo "TARGET_FFI=${VAPPS_TARGET_FFI}" >> $GITHUB_ENV
 
       - name: Install Linux dependencies - Ubuntu
         if: ${{ startsWith(runner.os,'Linux') && matrix.builds.name != 'linux-arm64' }}
@@ -128,6 +129,21 @@ jobs:
             --locked
             --target ${{ inputs.target_platform }}
             ${{ env.TARGET_BINS }}
+            ${{ env.TARGET_FEATURES }}
+
+      - name: Build FFI
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTFLAGS: "-C target_cpu=${{ inputs.target_cpu }}"
+          ROARING_ARCH: "${{ inputs.target_cpu }}"
+        with:
+          use-cross: false
+          command: build
+          args: >
+            --release
+            --locked
+            --target ${{ inputs.target_platform }}
+            ${{ env.TARGET_FFI }}
 
       - name: Debug target build
         shell: bash
