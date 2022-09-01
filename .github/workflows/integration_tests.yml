@@ -28,7 +28,14 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - name: npm ci and lint
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: 'npm'
+          cache-dependency-path: integration_tests/package-lock.json
+
+      - name: Run npm ci and lint
         shell: bash
         working-directory: integration_tests
         run: |
@@ -59,7 +66,7 @@ jobs:
             cp -v "$GITHUB_WORKSPACE/target/x86_64-unknown-linux-gnu/release/tari_*" temp/out/
           fi
 
-      - name: run cucumber scenarios
+      - name: Run cucumber scenarios
         timeout-minutes: 90
         shell: bash
         working-directory: integration_tests
@@ -76,7 +83,7 @@ jobs:
             --format json:cucumber_output/tests.cucumber --exit \
             --retry 2 --retry-tag-filter "@flaky and not @broken" || exit 1
 
-      - name: generate report
+      - name: Generate report
         if: always()
         shell: bash
         working-directory: integration_tests
@@ -85,7 +92,7 @@ jobs:
             node ./generate_report.js
           fi
 
-      - name: run ffi wallet cucumber scenarios
+      - name: Run ffi wallet cucumber scenarios
         if: ${{ env.tests_ffi == 'true' }}
         timeout-minutes: 90
         shell: bash
@@ -100,7 +107,7 @@ jobs:
             --format json:cucumber_output/tests_ffi.cucumber --exit \
             --retry 2 --retry-tag-filter "@flaky and not @broken" || exit 1
 
-      - name: generate ffi report
+      - name: Generate ffi report
         # if: ${{ env.tests_ffi == 'true' }}
         if: always()
         shell: bash
@@ -111,7 +118,7 @@ jobs:
               "temp/reports/cucumber_ffi_report.html"
           fi
 
-      - name: store test results and bins
+      - name: Store test results and bins
         uses: actions/upload-artifact@v3
         if: always()
         with:

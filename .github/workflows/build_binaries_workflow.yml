@@ -116,26 +116,28 @@ jobs:
           rustc --target=${{ inputs.target_platform }} --print target-features
           rustc --print target-list
 
-      - name: Build rust binaries
+      - name: Build binaries
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: "-C target_cpu=${{ inputs.target_cpu }}"
           ROARING_ARCH: "${{ inputs.target_cpu }}"
+          CARGO_BUILD_TARGET: ${{ inputs.target_platform }}
         with:
           use-cross: false
           command: build
+          # ${{ env.TARGET_FEATURES }}
           args: >
             --release
             --locked
             --target ${{ inputs.target_platform }}
             ${{ env.TARGET_BINS }}
-            ${{ env.TARGET_FEATURES }}
 
-      - name: Build FFI
+      - name: Build ffi lib
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: "-C target_cpu=${{ inputs.target_cpu }}"
           ROARING_ARCH: "${{ inputs.target_cpu }}"
+          CARGO_BUILD_TARGET: ${{ inputs.target_platform }}
         with:
           use-cross: false
           command: build
@@ -159,5 +161,5 @@ jobs:
           name: ${{ env.TBN_FILENAME }}_archive-${{ inputs.target_platform }}
           path: |
             ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*
-            ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/libtari_wallet_ffi.dylib
+            ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/libtari_wallet_ffi.so
             !${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*.d
