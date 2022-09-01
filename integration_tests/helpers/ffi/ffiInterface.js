@@ -50,6 +50,7 @@ class InterfaceFFI {
         fs.mkdirSync(baseDir, { recursive: true });
         fs.mkdirSync(baseDir + "/log", { recursive: true });
       }
+/*
       const ps = spawn(cmd, args, {
         cwd: baseDir,
         env: {
@@ -57,6 +58,8 @@ class InterfaceFFI {
           CARGO_TARGET_DIR: process.cwd() + "/temp/ffi-target",
         },
       });
+*/
+      const ps = spawn(cmd, args);
       ps.on("close", (_code) => {
         resolve(ps);
       });
