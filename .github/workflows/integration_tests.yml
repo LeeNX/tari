@@ -118,5 +118,5 @@ jobs:
           name: test results
           path: |
             integration_tests/cucumber_output
-            integration_tests/output
+            integration_tests/temp/out
             integration_tests/temp/reports

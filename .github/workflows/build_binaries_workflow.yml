@@ -159,4 +159,5 @@ jobs:
           name: ${{ env.TBN_FILENAME }}_archive-${{ inputs.target_platform }}
           path: |
             ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*
+            ${{ github.workspace }}/target/${{ inputs.target_platform }}/release/libtari_wallet_ffi.dylib
             !${{ github.workspace }}/target/${{ inputs.target_platform }}/release/tari_*.d
