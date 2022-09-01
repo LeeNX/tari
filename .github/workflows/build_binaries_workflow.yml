@@ -50,9 +50,6 @@ jobs:
           echo "SHA short - ${VSHA_SHORT}"
           echo "VSHA_SHORT=${VSHA_SHORT}" >> $GITHUB_ENV
           echo "VBRANCH=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
-          # build_binaries
-          #echo "TARGET_BINS=--bin ${{ inputs.build_binaries }}" >> $GITHUB_ENV
-          #cargo build --release --package tari_wallet_ffi
           VAPPS_STRING="${{ inputs.build_binaries }}"
           VAPPS_ARRAY=(${VAPPS_STRING})
           for i in "${!VAPPS_ARRAY[@]}"; do
@@ -61,10 +58,12 @@ jobs:
               VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --package ${VAPPS_ARRAY[$i]}"
             elif [ "${VAPPS_ARRAY[$i]:0:5}" = "tari_" ] ; then
               VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
+              VAPPS_TARGET_FEATURES="--features ${{ inputs.target_features }}"
             fi
           done
           echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
           echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
+          echo "TARGET_FEATURES=${VAPPS_TARGET_FEATURES}" >> $GITHUB_ENV
 
       - name: Install Linux dependencies - Ubuntu
         if: ${{ startsWith(runner.os,'Linux') && matrix.builds.name != 'linux-arm64' }}
@@ -107,7 +106,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "tari-binaries-builds"
-          env-vars: ""
+          # env-vars: ""
 
       - name: Debug target build
         continue-on-error: true
@@ -137,8 +136,8 @@ jobs:
             --release
             --locked
             --target ${{ inputs.target_platform }}
-            --features ${{ inputs.target_features }}
             ${{ env.TARGET_BINS }}
+            ${{ env.TARGET_FEATURES }}
 
       - name: Debug target build
         shell: bash
