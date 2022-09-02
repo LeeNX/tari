@@ -29,18 +29,13 @@ jobs:
           VAPPS_STRING="${{ env.build_binaries }}"
           VAPPS_ARRAY=(${VAPPS_STRING})
           for i in "${!VAPPS_ARRAY[@]}"; do
-            echo "element $i is ${VAPPS_ARRAY[$i]}"
-            if [ "${VAPPS_ARRAY[$i]}" = "tari_wallet_ffi" ] ; then
               VAPPS_TARGET_FFI="--package tari_wallet_ffi"
-            elif [ "${VAPPS_ARRAY[$i]:0:5}" = "tari_" ] ; then
+            if [ "${VAPPS_ARRAY[$i]:0:5}" = "tari_" ] ; then
               VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
-              VAPPS_TARGET_FEATURES="--features ${{ inputs.target_features }}"
             fi
           done
           echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
           echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
-          echo "TARGET_FEATURES=${VAPPS_TARGET_FEATURES}" >> $GITHUB_ENV
-          echo "TARGET_FFI=${VAPPS_TARGET_FFI}" >> $GITHUB_ENV
 
       - name: Install ubuntu dependencies
         shell: bash
