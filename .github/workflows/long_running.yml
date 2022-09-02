@@ -1,47 +1,53 @@
 ---
 # Runs weekly (saturday noon)
----
 name: Long running integration tests
 
-on:
+'on':
+  push:
+    branches:
+      - 'ci_leet-long_running'
   schedule:
-    - cron: "0 12 * * 6"
+    - cron: '0 12 * * 6'
 
 env:
   toolchain: nightly-2022-05-01
+  # space seperated string list
+  build_binaries: "tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner"
 
 jobs:
   long-running:
     name: Run long-running critical cucumber tests
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ env.toolchain }}
-          profile: minimal
-          override: true
-      - uses: Swatinem/rust-cache@v1
-      - name: ubuntu dependencies
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Envs setup
+        id: envs_setup
+        shell: bash
         run: |
-          sudo apt-get update && \
+          VAPPS_STRING="${{ env.build_binaries }}"
+          VAPPS_ARRAY=(${VAPPS_STRING})
+          for i in "${!VAPPS_ARRAY[@]}"; do
+            echo "element $i is ${VAPPS_ARRAY[$i]}"
+            if [ "${VAPPS_ARRAY[$i]}" = "tari_wallet_ffi" ] ; then
+              VAPPS_TARGET_FFI="--package tari_wallet_ffi"
+            elif [ "${VAPPS_ARRAY[$i]:0:5}" = "tari_" ] ; then
+              VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
+              VAPPS_TARGET_FEATURES="--features ${{ inputs.target_features }}"
+            fi
+          done
+          echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
+          echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
+          echo "TARGET_FEATURES=${VAPPS_TARGET_FEATURES}" >> $GITHUB_ENV
+          echo "TARGET_FFI=${VAPPS_TARGET_FFI}" >> $GITHUB_ENV
+
+      - name: Install ubuntu dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo bash scripts/install_ubuntu_dependencies.sh
           sudo apt-get -y install \
-            openssl \
-            libssl-dev \
-            pkg-config \
-            libsqlite3-dev \
-            clang-10 \
-            git \
-            cmake \
-            libc++-dev \
-            libc++abi-dev \
-            libprotobuf-dev \
-            protobuf-compiler \
-            libncurses5-dev \
-            libncursesw5-dev \
-            zip \
             build-essential \
             libgtk-3-dev \
             libwebkit2gtk-4.0-dev \
@@ -51,40 +57,65 @@ jobs:
             libappindicator3-dev \
             patchelf \
             librsvg2-dev
-      - name: node -v
-        run: node -v
-      - name: build base node
+
+      - name: Setup rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+          toolchain: ${{ env.toolchain }}
+          override: true
+
+      - name: Cache cargo files and outputs
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build binaries
         uses: actions-rs/cargo@v1
         with:
+          use-cross: false
           command: build
-          args: --release --bin tari_base_node
-      - name: build console wallet
-        uses: actions-rs/cargo@v1
+          args: >
+            --release
+            --locked
+            ${{ env.TARGET_BINS }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          command: build
-          args: --release --bin tari_console_wallet
-      - name: build merge mining proxy
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --bin tari_merge_mining_proxy
-      - name: build miner
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --bin tari_miner
-      - name: build validator node
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --bin tari_validator_node
-      - name: npm ci
-        run: cd integration_tests && npm ci && cd node_modules/wallet-grpc-client && npm ci
+          node-version: 16
+          cache: 'npm'
+          cache-dependency-path: integration_tests/package-lock.json
+
+      - name: Run npm ci and lint
+        shell: bash
+        working-directory: integration_tests
+        run: |
+          node -v
+          npm install
+          npm run check-fmt
+          npm run lint
+          npm ci
+          cd ../clients/base_node_grpc_client
+          npm install
+          cd ../wallet_grpc_client
+          npm install
+          npm ci
+
       - name: Run integration tests
-        run: cd integration_tests && mkdir -p cucumber_output && node_modules/.bin/cucumber-js --profile "long-running" --tags "not @wallet-ffi"  --format json:cucumber_output/tests.cucumber --exit --retry 2 --retry-tag-filter "@flaky and not @broken"
+        shell: bash
+        working-directory: integration_tests
+        run: |
+          mkdir -p cucumber_output
+          node_modules/.bin/cucumber-js --profile "long-running" \
+            --tags "not @wallet-ffi" --format json:cucumber_output/tests.cucumber \
+            --exit --retry 2 --retry-tag-filter "@flaky and not @broken"
+
       - name: Generate report
         if: always()
-        run: cd integration_tests && node ./generate_report.js
+        shell: bash
+        working-directory: integration_tests
+        run: node ./generate_report.js
+
       - name: Store test results
         uses: actions/upload-artifact@v3
         if: always()
@@ -93,3 +124,4 @@ jobs:
           path: |
             integration_tests/cucumber_output
             integration_tests/temp/reports
+            integration_tests/temp/out
