@@ -3,11 +3,14 @@ name: Integration tests
 
 'on':
   push:
+    paths-ignore:
+      - '**/*.md'
     branches:
       - 'ci_leet-long_running'
   schedule:
     - cron: '0 2 * * *'   # daily @ 02h00
     - cron: '0 12 * * 6'  # weekly - Saturday @ noon
+  workflow_dispatch:
 
 env:
   toolchain: nightly-2022-05-01
@@ -29,12 +32,10 @@ jobs:
           VAPPS_STRING="${{ env.build_binaries }}"
           VAPPS_ARRAY=(${VAPPS_STRING})
           for i in "${!VAPPS_ARRAY[@]}"; do
-              VAPPS_TARGET_FFI="--package tari_wallet_ffi"
             if [ "${VAPPS_ARRAY[$i]:0:5}" = "tari_" ] ; then
               VAPPS_TARGET_BINS="${VAPPS_TARGET_BINS} --bin ${VAPPS_ARRAY[$i]}"
             fi
           done
-          echo "VAPPS_TARGET_BINS is ${VAPPS_TARGET_BINS}"
           echo "TARGET_BINS=${VAPPS_TARGET_BINS}" >> $GITHUB_ENV
           if [ "${{ github.event_name }}" == "schedule" ] ; then
             if [ "${{ github.event.schedule }}" == "0 2 * * *" ] ; then
@@ -72,6 +73,16 @@ jobs:
             --release
             --locked
             ${{ env.TARGET_BINS }}
+
+      - name: Build ffi
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: >
+            --release
+            --locked
+            --package tari_wallet_ffi
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
