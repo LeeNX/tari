@@ -6,7 +6,7 @@ name: Integration tests
     paths-ignore:
       - '**/*.md'
     branches:
-      - 'ci_leet-long_running'
+      - 'ci-*'
   schedule:
     - cron: '0 2 * * *'   # daily @ 02h00
     - cron: '0 12 * * 6'  # weekly - Saturday @ noon
@@ -25,7 +25,7 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - name: Envs setup
+      - name: Envs setup for ${{ env.CI_RUN }}
         id: envs_setup
         shell: bash
         run: |
@@ -84,6 +84,20 @@ jobs:
             --locked
             --package tari_wallet_ffi
 
+      - name: CI folder prep
+        shell: bash
+        working-directory: integration_tests
+        run: |
+          mkdir -p cucumber_output
+          mkdir -p temp/reports
+          mkdir -p temp/out
+          cd ../target/release/
+          cp -v ${{ env.build_binaries }} integration_tests/temp/out
+          cd $GITHUB_WORKSPACE/integration_tests/temp/out
+          shasum -a 256 ${{ env.build_binaries }} > integration_tests.sha256sums
+          cat integration_tests.sha256sums
+          ls -alht
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -111,7 +125,6 @@ jobs:
         shell: bash
         working-directory: integration_tests
         run: |
-          mkdir -p cucumber_output
           node_modules/.bin/cucumber-js --profile "${{ env.CI_RUN }}" \
             --tags "not @wallet-ffi" --format json:cucumber_output/tests.cucumber \
             --exit --retry 2 --retry-tag-filter "@flaky and not @broken"
