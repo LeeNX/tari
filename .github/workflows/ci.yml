@@ -24,7 +24,8 @@ env:
 jobs:
   clippy:
     name: clippy
-    runs-on: [ self-hosted, ubuntu18.04-high-cpu ]
+    #runs-on: [ self-hosted, ubuntu18.04-high-cpu ]
+    runs-on: [ ubuntu-20.04 ]
     steps:
       - name: checkout
         uses: actions/checkout@v2
