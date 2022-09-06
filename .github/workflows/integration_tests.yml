@@ -12,6 +12,10 @@ name: Integration tests
     - cron: '0 12 * * 6'  # weekly - Saturday @ noon
   workflow_dispatch:
     inputs:
+      ci_bins:
+        type: boolean
+        default: true
+        description: 'run ci on binaries'
       ci_ffi:
         type: boolean
         default: true
@@ -27,7 +31,7 @@ env:
   build_binaries: "tari_base_node tari_console_wallet tari_merge_mining_proxy tari_miner"
 
 jobs:
-  long-running:
+  cucumber_tests:
     name: Cucumber tests
     runs-on: ubuntu-latest
     steps:
@@ -54,10 +58,14 @@ jobs:
               echo "CI_RUN=long-running" >> $GITHUB_ENV
             fi
           else
+            echo "CI ..."
             echo "CI_RUN=ci" >> $GITHUB_ENV
-            if [ "${{ inputs.ci_ffi }}" == "true" ] ; then
-              echo "CI_FFI=true" >> $GITHUB_ENV
-            fi
+            CI_BINS=${{ inputs.ci_bins }}
+            echo "${CI_BINS}"
+            echo "CI_BINS=${CI_BINS:-true}" >> $GITHUB_ENV
+            CI_FFI=${{ inputs.ci_ffi }}
+            echo "${CI_FFI}"
+            echo "CI_FFI=${CI_FFI:-true}" >> $GITHUB_ENV
           fi
 
       - name: Install ubuntu dependencies
@@ -134,6 +142,7 @@ jobs:
           npm ci
 
       - name: Run ${{ env.CI_RUN }} integration tests
+        if: ${{ env.ci_bins == 'true' }}
         continue-on-error: true
         shell: bash
         working-directory: integration_tests
