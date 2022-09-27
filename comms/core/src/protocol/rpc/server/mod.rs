@@ -34,10 +34,13 @@ mod metrics;
 
 pub mod mock;
 
+mod early_close;
 mod router;
+
 use std::{
     borrow::Cow,
     cmp,
+    collections::HashMap,
     convert::TryFrom,
     future::Future,
     io,
@@ -47,10 +50,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{future, stream, SinkExt, StreamExt};
+use futures::{future, stream, stream::FuturesUnordered, SinkExt, StreamExt};
+use log::*;
 use prost::Message;
 use router::Router;
-use tokio::{sync::mpsc, time};
+use tokio::{sync::mpsc, task::JoinHandle, time};
 use tokio_stream::Stream;
 use tower::{make::MakeService, Service};
 use tracing::{debug, error, instrument, span, trace, warn, Instrument, Level};
@@ -73,7 +77,11 @@ use crate::{
     peer_manager::NodeId,
     proto,
     protocol::{
-        rpc::{body::BodyBytes, message::RpcResponse},
+        rpc::{
+            body::BodyBytes,
+            message::{RpcMethod, RpcResponse},
+            server::early_close::EarlyClose,
+        },
         ProtocolEvent,
         ProtocolId,
         ProtocolNotification,
@@ -84,7 +92,7 @@ use crate::{
     Substream,
 };
 
-const LOG_TARGET: &str = "comms::rpc";
+const LOG_TARGET: &str = "comms::rpc::server";
 
 pub trait NamedProtocolService {
     const PROTOCOL_NAME: &'static [u8];
@@ -166,6 +174,7 @@ impl Default for RpcServer {
 #[derive(Clone)]
 pub struct RpcServerBuilder {
     maximum_simultaneous_sessions: Option<usize>,
+    maximum_sessions_per_client: Option<usize>,
     minimum_client_deadline: Duration,
     handshake_timeout: Duration,
 }
@@ -182,6 +191,16 @@ impl RpcServerBuilder {
 
     pub fn with_unlimited_simultaneous_sessions(mut self) -> Self {
         self.maximum_simultaneous_sessions = None;
+        self
+    }
+
+    pub fn with_maximum_sessions_per_client(mut self, limit: usize) -> Self {
+        self.maximum_sessions_per_client = Some(cmp::min(limit, BoundedExecutor::max_theoretical_tasks()));
+        self
+    }
+
+    pub fn with_unlimited_sessions_per_client(mut self) -> Self {
+        self.maximum_sessions_per_client = None;
         self
     }
 
@@ -203,7 +222,8 @@ impl RpcServerBuilder {
 impl Default for RpcServerBuilder {
     fn default() -> Self {
         Self {
-            maximum_simultaneous_sessions: Some(1000),
+            maximum_simultaneous_sessions: None,
+            maximum_sessions_per_client: None,
             minimum_client_deadline: Duration::from_secs(1),
             handshake_timeout: Duration::from_secs(15),
         }
@@ -217,6 +237,8 @@ pub(super) struct PeerRpcServer<TSvc, TCommsProvider> {
     protocol_notifications: Option<ProtocolNotificationRx<Substream>>,
     comms_provider: TCommsProvider,
     request_rx: mpsc::Receiver<RpcServerRequest>,
+    sessions: HashMap<NodeId, usize>,
+    tasks: FuturesUnordered<JoinHandle<NodeId>>,
 }
 
 impl<TSvc, TCommsProvider> PeerRpcServer<TSvc, TCommsProvider>
@@ -252,6 +274,8 @@ where
             protocol_notifications: Some(protocol_notifications),
             comms_provider,
             request_rx,
+            sessions: HashMap::new(),
+            tasks: FuturesUnordered::new(),
         }
     }
 
@@ -271,6 +295,10 @@ where
                     }
                 }
 
+                Some(Ok(node_id)) = self.tasks.next() => {
+                    self.on_session_complete(&node_id);
+                },
+
                 Some(req) = self.request_rx.recv() => {
                      self.handle_request(req).await;
                 },
@@ -286,7 +314,8 @@ where
     }
 
     async fn handle_request(&self, req: RpcServerRequest) {
-        use RpcServerRequest::GetNumActiveSessions;
+        #[allow(clippy::enum_glob_use)]
+        use RpcServerRequest::*;
         match req {
             GetNumActiveSessions(reply) => {
                 let max_sessions = self
@@ -294,6 +323,10 @@ where
                     .maximum_simultaneous_sessions
                     .unwrap_or_else(BoundedExecutor::max_theoretical_tasks);
                 let num_active = max_sessions.saturating_sub(self.executor.num_available());
+                let _ = reply.send(num_active);
+            },
+            GetNumActiveSessionsForPeer(node_id, reply) => {
+                let num_active = self.sessions.get(&node_id).copied().unwrap_or(0);
                 let _ = reply.send(num_active);
             },
         }
@@ -331,6 +364,32 @@ where
         }
 
         Ok(())
+    }
+
+    fn new_session_for(&mut self, node_id: NodeId) -> Result<usize, RpcServerError> {
+        let count = self.sessions.entry(node_id.clone()).or_insert(0);
+        match self.config.maximum_sessions_per_client {
+            Some(max) if max > 0 => {
+                debug_assert!(*count <= max);
+                if *count >= max {
+                    return Err(RpcServerError::MaxSessionsPerClientReached { node_id });
+                }
+            },
+            Some(_) | None => {},
+        }
+
+        *count += 1;
+        Ok(*count)
+    }
+
+    fn on_session_complete(&mut self, node_id: &NodeId) {
+        info!(target: LOG_TARGET, "Session complete for {}", node_id);
+        if let Some(v) = self.sessions.get_mut(node_id) {
+            *v -= 1;
+            if *v == 0 {
+                self.sessions.remove(node_id);
+            }
+        }
     }
 
     #[tracing::instrument(name = "rpc::server::try_initiate_service", skip(self, framed), err)]
@@ -371,6 +430,22 @@ where
             },
         };
 
+        match self.new_session_for(node_id.clone()) {
+            Ok(num_sessions) => {
+                info!(
+                    target: LOG_TARGET,
+                    "NEW SESSION for {} ({} active) ", node_id, num_sessions
+                );
+            },
+
+            Err(err) => {
+                handshake
+                    .reject_with_reason(HandshakeRejectReason::NoSessionsAvailable)
+                    .await?;
+                return Err(err);
+            },
+        }
+
         let version = handshake.perform_server_handshake().await?;
         debug!(
             target: LOG_TARGET,
@@ -387,14 +462,20 @@ where
         );
 
         let node_id = node_id.clone();
-        self.executor
+        let handle = self
+            .executor
             .try_spawn(async move {
                 let num_sessions = metrics::num_sessions(&node_id, &service.protocol);
                 num_sessions.inc();
                 service.start().await;
+                info!(target: LOG_TARGET, "END OF SESSION for {} ", node_id,);
                 num_sessions.dec();
+
+                node_id
             })
             .map_err(|_| RpcServerError::MaximumSessionsReached)?;
+
+        self.tasks.push(handle);
 
         Ok(())
     }
@@ -405,7 +486,7 @@ struct ActivePeerRpcService<TSvc, TCommsProvider> {
     protocol: ProtocolId,
     node_id: NodeId,
     service: TSvc,
-    framed: CanonicalFraming<Substream>,
+    framed: EarlyClose<CanonicalFraming<Substream>>,
     comms_provider: TCommsProvider,
     logging_context_string: Arc<String>,
 }
@@ -435,7 +516,7 @@ where
             protocol,
             node_id,
             service,
-            framed,
+            framed: EarlyClose::new(framed),
             comms_provider,
         }
     }
@@ -447,9 +528,17 @@ where
         );
         if let Err(err) = self.run().await {
             metrics::error_counter(&self.node_id, &self.protocol, &err).inc();
-            error!(
+            let level = match &err {
+                RpcServerError::Io(e) => err_to_log_level(e),
+                RpcServerError::EarlyCloseError(e) => e.io().map(err_to_log_level).unwrap_or(log::Level::Error),
+                _ => log::Level::Error,
+            };
+            log!(
                 target: LOG_TARGET,
-                "({}) Rpc server exited with an error: {}", self.logging_context_string, err
+                level,
+                "({}) Rpc server exited with an error: {}",
+                self.logging_context_string,
+                err
             );
         }
     }
@@ -463,11 +552,14 @@ where
                     request_bytes.observe(frame.len() as f64);
                     if let Err(err) = self.handle_request(frame.freeze()).await {
                         if let Err(err) = self.framed.close().await {
-                            error!(
+                            let level = err.io().map(err_to_log_level).unwrap_or(log::Level::Error);
+
+                            log!(
                                 target: LOG_TARGET,
+                                level,
                                 "({}) Failed to close substream after socket error: {}",
                                 self.logging_context_string,
-                                err
+                                err,
                             );
                         }
                         error!(
@@ -509,7 +601,7 @@ where
         let decoded_msg = proto::rpc::RpcRequest::decode(&mut request)?;
 
         let request_id = decoded_msg.request_id;
-        let method = decoded_msg.method.into();
+        let method = RpcMethod::from(decoded_msg.method);
         let deadline = Duration::from_secs(decoded_msg.deadline);
 
         // The client side deadline MUST be greater or equal to the minimum_client_deadline
@@ -557,7 +649,10 @@ where
 
         debug!(
             target: LOG_TARGET,
-            "({}) Request: {}", self.logging_context_string, decoded_msg
+            "({}) Request: {}, Method: {}",
+            self.logging_context_string,
+            decoded_msg,
+            method.id()
         );
 
         let req = Request::with_context(
@@ -598,7 +693,7 @@ where
                 self.process_body(request_id, deadline, body).await?;
             },
             Err(err) => {
-                error!(
+                debug!(
                     target: LOG_TARGET,
                     "{} Service returned an error: {}", self.logging_context_string, err
                 );
@@ -644,44 +739,50 @@ where
             .map(|resp| Bytes::from(resp.to_encoded_bytes()));
 
         loop {
-            // Check if the client interrupted the outgoing stream
-            if let Err(err) = self.check_interruptions().await {
-                match err {
-                    err @ RpcServerError::ClientInterruptedStream => {
-                        debug!(target: LOG_TARGET, "Stream was interrupted: {}", err);
-                        break;
-                    },
-                    err => {
-                        error!(target: LOG_TARGET, "Stream was interrupted: {}", err);
-                        return Err(err);
-                    },
-                }
-            }
-
             let next_item = log_timing(
                 self.logging_context_string.clone(),
                 request_id,
                 "message read",
                 stream.next(),
             );
-            match time::timeout(deadline, next_item).await {
-                Ok(Some(msg)) => {
-                    response_bytes.observe(msg.len() as f64);
-                    debug!(
-                        target: LOG_TARGET,
-                        "({}) Sending body len = {}",
-                        self.logging_context_string,
-                        msg.len()
-                    );
+            let timeout = time::sleep(deadline);
 
-                    self.framed.send(msg).await?;
+            tokio::select! {
+                // Check if the client interrupted the outgoing stream
+                Err(err) = self.check_interruptions() => {
+                    match err {
+                        err @ RpcServerError::ClientInterruptedStream => {
+                            debug!(target: LOG_TARGET, "Stream was interrupted by client: {}", err);
+                            break;
+                        },
+                        err => {
+                            error!(target: LOG_TARGET, "Stream was interrupted: {}", err);
+                            return Err(err);
+                        },
+                    }
                 },
-                Ok(None) => {
-                    debug!(target: LOG_TARGET, "{} Request complete", self.logging_context_string,);
-                    break;
+                msg = next_item => {
+                     match msg {
+                         Some(msg) => {
+                            response_bytes.observe(msg.len() as f64);
+                            debug!(
+                                target: LOG_TARGET,
+                                "({}) Sending body len = {}",
+                                self.logging_context_string,
+                                msg.len()
+                            );
+
+                            self.framed.send(msg).await?;
+                        },
+                        None => {
+                            debug!(target: LOG_TARGET, "{} Request complete", self.logging_context_string,);
+                            break;
+                        },
+                    }
                 },
-                Err(_) => {
-                    debug!(
+
+                _ = timeout => {
+                     debug!(
                         target: LOG_TARGET,
                         "({}) Failed to return result within client deadline ({:.0?})",
                         self.logging_context_string,
@@ -695,8 +796,8 @@ where
                     )
                     .inc();
                     break;
-                },
-            }
+                }
+            } // end select!
         } // end loop
         Ok(())
     }
@@ -752,11 +853,9 @@ async fn log_timing<R, F: Future<Output = R>>(context_str: Arc<String>, request_
     ret
 }
 
-#[allow(clippy::cognitive_complexity)]
 fn into_response(request_id: u32, result: Result<BodyBytes, RpcStatus>) -> RpcResponse {
     match result {
         Ok(msg) => {
-            trace!(target: LOG_TARGET, "Sending body len = {}", msg.len());
             let mut flags = RpcMessageFlags::empty();
             if msg.is_finished() {
                 flags |= RpcMessageFlags::FIN;
@@ -777,5 +876,12 @@ fn into_response(request_id: u32, result: Result<BodyBytes, RpcStatus>) -> RpcRe
                 payload: Bytes::from(err.to_details_bytes()),
             }
         },
+    }
+}
+
+fn err_to_log_level(err: &io::Error) -> log::Level {
+    match err.kind() {
+        io::ErrorKind::BrokenPipe | io::ErrorKind::WriteZero => log::Level::Debug,
+        _ => log::Level::Error,
     }
 }

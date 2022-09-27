@@ -23,7 +23,10 @@
 use diesel::result::Error as DieselError;
 use futures::channel::oneshot::Canceled;
 use serde_json::Error as SerdeJsonError;
-use tari_common_types::transaction::{TransactionConversionError, TransactionDirectionError, TxId};
+use tari_common_types::{
+    transaction::{TransactionConversionError, TransactionDirectionError, TxId},
+    types::FixedHashSizeError,
+};
 use tari_comms::{connectivity::ConnectivityError, peer_manager::node_id::NodeIdError, protocol::rpc::RpcError};
 use tari_comms_dht::outbound::DhtOutboundError;
 use tari_core::transactions::{
@@ -91,6 +94,8 @@ pub enum TransactionServiceError {
     AttemptedToBroadcastCoinbaseTransaction(TxId),
     #[error("No Base Node public keys are provided for Base chain broadcast and monitoring")]
     NoBaseNodeKeysProvided,
+    #[error("Base node changed during {task_name}")]
+    BaseNodeChanged { task_name: &'static str },
     #[error("Error sending data to Protocol via registered channels")]
     ProtocolChannelError,
     #[error("Transaction detected as rejected by mempool")]
@@ -157,6 +162,8 @@ pub enum TransactionServiceError {
     ServiceError(String),
     #[error("Wallet Recovery in progress so Transaction Service Messaging Requests ignored")]
     WalletRecoveryInProgress,
+    #[error("Wallet Transaction Validation already in progress, request ignored")]
+    TransactionValidationInProgress,
     #[error("Connectivity error: {source}")]
     ConnectivityError {
         #[from]
@@ -166,6 +173,8 @@ pub enum TransactionServiceError {
     BaseNodeNotSynced,
     #[error("Value encryption error: `{0}`")]
     EncryptionError(#[from] EncryptionError),
+    #[error("FixedHash size error: `{0}`")]
+    FixedHashSizeError(#[from] FixedHashSizeError),
 }
 
 #[derive(Debug, Error)]

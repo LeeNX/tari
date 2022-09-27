@@ -33,6 +33,8 @@ use thiserror::Error;
 use crate::{
     actor::DhtActorError,
     envelope::DhtMessageError,
+    error::DhtEncryptError,
+    inbound::DhtInboundError,
     message_signature::MessageSignatureError,
     outbound::DhtOutboundError,
     storage::StorageError,
@@ -49,8 +51,12 @@ pub enum StoreAndForwardError {
     PeerManagerError(#[from] PeerManagerError),
     #[error("DhtOutboundError: {0}")]
     DhtOutboundError(#[from] DhtOutboundError),
+    #[error("DhtEncryptError: {0}")]
+    DhtEncryptError(#[from] DhtEncryptError),
     #[error("Received stored message has an invalid destination")]
     InvalidDestination,
+    #[error("DhtInboundError: {0}")]
+    DhtInboundError(#[from] DhtInboundError),
     #[error("Received stored message has an invalid origin signature: {0}")]
     InvalidMessageSignature(#[from] MessageSignatureError),
     #[error("Invalid envelope body")]
@@ -87,7 +93,7 @@ pub enum StoreAndForwardError {
     RequestMessagesFailed(DhtOutboundError),
     #[error("Received SAF messages that were not requested")]
     ReceivedUnrequestedSafMessages,
-    #[error("SAF messages received from peer {peer} after deadline. Received after {0:.2?}")]
+    #[error("SAF messages received from peer {peer} after deadline. Received after {message_age:.2?}")]
     SafMessagesReceivedAfterDeadline { peer: NodeId, message_age: Duration },
     #[error("Invalid SAF request: `stored_at` cannot be in the future")]
     StoredAtWasInFuture,

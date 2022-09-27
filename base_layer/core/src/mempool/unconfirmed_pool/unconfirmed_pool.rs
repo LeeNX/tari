@@ -26,12 +26,10 @@ use std::{
     sync::Arc,
 };
 
-use digest::Digest;
 use log::*;
 use serde::{Deserialize, Serialize};
-use tari_common_types::types::{HashOutput, PrivateKey, PublicKey, Signature};
-use tari_crypto::hash::blake2::Blake256;
-use tari_utilities::{hex::Hex, ByteArray, Hashable};
+use tari_common_types::types::{FixedHash, HashOutput, PrivateKey, Signature};
+use tokio::time::Instant;
 
 use crate::{
     blocks::Block,
@@ -40,13 +38,8 @@ use crate::{
         unconfirmed_pool::UnconfirmedPoolError,
         FeePerGramStat,
     },
-    transactions::{
-        tari_amount::MicroTari,
-        transaction_components::{Transaction, TransactionOutput},
-        weight::TransactionWeight,
-    },
+    transactions::{tari_amount::MicroTari, transaction_components::Transaction, weight::TransactionWeight},
 };
-
 pub const LOG_TARGET: &str = "c::mp::unconfirmed_pool::unconfirmed_pool_storage";
 
 type TransactionKey = usize;
@@ -117,21 +110,21 @@ impl UnconfirmedPool {
         tx: Arc<Transaction>,
         dependent_outputs: Option<Vec<HashOutput>>,
         transaction_weighting: &TransactionWeight,
-    ) -> Result<(), UnconfirmedPoolError> {
+    ) {
         if tx
             .body
             .kernels()
             .iter()
             .all(|k| self.txs_by_signature.contains_key(k.excess_sig.get_signature()))
         {
-            return Ok(());
+            return;
         }
 
         let new_key = self.get_next_key();
         let prioritized_tx = PrioritizedTransaction::new(new_key, transaction_weighting, tx, dependent_outputs);
         if self.tx_by_key.len() >= self.config.storage_capacity {
             if prioritized_tx.priority < *self.lowest_priority() {
-                return Ok(());
+                return;
             }
             self.remove_lowest_priority_tx();
         }
@@ -139,10 +132,6 @@ impl UnconfirmedPool {
         self.tx_by_priority.insert(prioritized_tx.priority.clone(), new_key);
         for output in prioritized_tx.transaction.body.outputs() {
             self.txs_by_output.entry(output.hash()).or_default().push(new_key);
-
-            if let Some(hash) = get_output_token_id(output) {
-                self.txs_by_unique_id.entry(hash).or_default().push(new_key);
-            }
         }
         for kernel in prioritized_tx.transaction.body.kernels() {
             let sig = kernel.excess_sig.get_signature();
@@ -154,8 +143,6 @@ impl UnconfirmedPool {
             "Inserted transaction {} into unconfirmed pool:", prioritized_tx
         );
         self.tx_by_key.insert(new_key, prioritized_tx);
-
-        Ok(())
     }
 
     /// TThis will search the unconfirmed pool for the set of outputs and return true if all of them are found
@@ -169,11 +156,10 @@ impl UnconfirmedPool {
         &mut self,
         txs: I,
         transaction_weighting: &TransactionWeight,
-    ) -> Result<(), UnconfirmedPoolError> {
+    ) {
         for tx in txs {
-            self.insert(tx, None, transaction_weighting)?;
+            self.insert(tx, None, transaction_weighting);
         }
-        Ok(())
     }
 
     /// Check if a transaction is available in the UnconfirmedPool
@@ -311,19 +297,6 @@ impl UnconfirmedPool {
             }
         }
 
-        for output in transaction.transaction.body.outputs() {
-            match get_output_token_id(output) {
-                Some(hash) => {
-                    if !unique_ids.insert(hash) {
-                        // This transaction has a unique id of another transaction that has already been selected,
-                        // Skip adding it.
-                        return Ok(());
-                    }
-                },
-                None => continue,
-            }
-        }
-
         if required_transactions
             .insert(transaction.key, transaction.transaction.clone())
             .is_none()
@@ -360,14 +333,15 @@ impl UnconfirmedPool {
         current_transactions: &HashMap<TransactionKey, Arc<Transaction>>,
         transactions_to_insert: &HashMap<TransactionKey, Arc<Transaction>>,
     ) -> bool {
-        for (_, tx_to_insert) in transactions_to_insert.iter() {
-            for (_, transaction) in current_transactions.iter() {
-                for input in transaction.body.inputs() {
-                    for tx_input in tx_to_insert.body.inputs() {
-                        if tx_input.output_hash() == input.output_hash() {
-                            return true;
-                        }
-                    }
+        let insert_set = transactions_to_insert
+            .values()
+            .flat_map(|tx| tx.body.inputs())
+            .map(|i| i.output_hash())
+            .collect::<HashSet<_>>();
+        for (_, transaction) in current_transactions.iter() {
+            for input in transaction.body.inputs() {
+                if insert_set.contains(&input.output_hash()) {
+                    return true;
                 }
             }
         }
@@ -404,65 +378,99 @@ impl UnconfirmedPool {
             target: LOG_TARGET,
             "Searching for transactions to remove from unconfirmed pool in block {} ({})",
             published_block.header.height,
-            published_block.header.hash().to_hex(),
+            published_block.header.hash()
         );
 
-        // Remove all transactions that contain the kernels found in this block
-        let mut to_remove = published_block
-            .body
-            .kernels()
-            .iter()
-            .map(|kernel| kernel.excess_sig.get_signature())
-            .filter_map(|sig| self.txs_by_signature.get(sig))
-            .flatten()
-            .copied()
-            .collect::<Vec<_>>();
+        let mut to_remove;
+        let mut removed_transactions;
+        {
+            // Remove all transactions that contain the kernels found in this block
+            let timer = Instant::now();
+            to_remove = published_block
+                .body
+                .kernels()
+                .iter()
+                .map(|kernel| kernel.excess_sig.get_signature())
+                .filter_map(|sig| self.txs_by_signature.get(sig))
+                .flatten()
+                .copied()
+                .collect::<Vec<_>>();
 
-        let mut removed_transactions = to_remove
-            .iter()
-            .filter_map(|key| self.remove_transaction(*key))
-            .collect::<Vec<_>>();
-
+            removed_transactions = to_remove
+                .iter()
+                .filter_map(|key| self.remove_transaction(*key))
+                .collect::<Vec<_>>();
+            debug!(
+                target: LOG_TARGET,
+                "Found {} transactions with matching kernel sigs from unconfirmed pool in {:.2?}",
+                to_remove.len(),
+                timer.elapsed()
+            );
+        }
         // Reuse the buffer, clear is very cheap
         to_remove.clear();
 
-        // Remove all transactions that contain the inputs found in this block
-        to_remove.extend(
-            self.tx_by_key
+        {
+            // Remove all transactions that contain the inputs found in this block
+            let timer = Instant::now();
+            let published_block_hash_set = published_block
+                .body
+                .inputs()
                 .iter()
-                .filter(|(_, tx)| UnconfirmedPool::find_matching_block_input(tx, published_block))
-                .map(|(key, _)| *key),
-        );
+                .map(|i| i.output_hash())
+                .collect::<HashSet<_>>();
 
-        removed_transactions.extend(to_remove.iter().filter_map(|key| self.remove_transaction(*key)));
+            to_remove.extend(
+                self.tx_by_key
+                    .iter()
+                    .filter(|(_, tx)| UnconfirmedPool::find_matching_block_input(tx, &published_block_hash_set))
+                    .map(|(key, _)| *key),
+            );
+
+            removed_transactions.extend(to_remove.iter().filter_map(|key| self.remove_transaction(*key)));
+            debug!(
+                target: LOG_TARGET,
+                "Found {} transactions with matching inputs from unconfirmed pool in {:.2?}",
+                to_remove.len(),
+                timer.elapsed()
+            );
+        }
+
         to_remove.clear();
 
-        // Remove all transactions that contain the outputs found in this block
-        to_remove.extend(
-            published_block
-                .body
-                .outputs()
-                .iter()
-                .filter_map(|output| self.txs_by_output.get(&output.hash()))
-                .flatten()
-                .copied(),
-        );
+        {
+            // Remove all transactions that contain the outputs found in this block
+            let timer = Instant::now();
+            to_remove.extend(
+                published_block
+                    .body
+                    .outputs()
+                    .iter()
+                    .filter_map(|output| self.txs_by_output.get(&output.hash()))
+                    .flatten()
+                    .copied(),
+            );
 
-        removed_transactions.extend(to_remove.iter().filter_map(|key| self.remove_transaction(*key)));
+            removed_transactions.extend(to_remove.iter().filter_map(|key| self.remove_transaction(*key)));
+            debug!(
+                target: LOG_TARGET,
+                "Found {} transactions with matching outputs from unconfirmed pool in {:.2?}",
+                to_remove.len(),
+                timer.elapsed()
+            );
+        }
 
         removed_transactions
     }
 
     /// Searches a block and transaction for matching inputs
-    fn find_matching_block_input(transaction: &PrioritizedTransaction, published_block: &Block) -> bool {
-        for input in transaction.transaction.body.inputs() {
-            for published_input in published_block.body.inputs() {
-                if published_input.output_hash() == input.output_hash() {
-                    return true;
-                }
-            }
-        }
-        false
+    fn find_matching_block_input(transaction: &PrioritizedTransaction, published_block: &HashSet<FixedHash>) -> bool {
+        transaction
+            .transaction
+            .body
+            .inputs()
+            .iter()
+            .any(|input| published_block.contains(&input.output_hash()))
     }
 
     /// Ensures that all transactions are safely deleted in order and from all storage
@@ -492,17 +500,6 @@ impl UnconfirmedPool {
                     self.txs_by_output.remove(&output_hash);
                 }
             }
-
-            if let Some(hash) = get_output_token_id(output) {
-                if let Some(keys) = self.txs_by_unique_id.get_mut(&hash) {
-                    if let Some(pos) = keys.iter().position(|k| *k == tx_key) {
-                        keys.remove(pos);
-                    }
-                    if keys.is_empty() {
-                        self.txs_by_unique_id.remove(&hash);
-                    }
-                }
-            }
         }
 
         trace!(
@@ -511,21 +508,6 @@ impl UnconfirmedPool {
             &prioritized_transaction.transaction
         );
         Some(prioritized_transaction.transaction)
-    }
-
-    /// Remove all unconfirmed transactions that have become time locked. This can happen when the chain height was
-    /// reduced on some reorgs.
-    pub fn remove_timelocked(&mut self, tip_height: u64) {
-        debug!(target: LOG_TARGET, "Removing time-locked inputs from unconfirmed pool");
-        let to_remove = self
-            .tx_by_key
-            .iter()
-            .filter(|(_, ptx)| ptx.transaction.min_spendable_height() > tip_height + 1)
-            .map(|(k, _)| *k)
-            .collect::<Vec<_>>();
-        for tx_key in to_remove {
-            self.remove_transaction(tx_key);
-        }
     }
 
     /// Returns the total number of unconfirmed transactions stored in the UnconfirmedPool.
@@ -650,29 +632,9 @@ impl UnconfirmedPool {
     }
 }
 
-fn get_output_token_id(output: &TransactionOutput) -> Option<[u8; 32]> {
-    output.features.unique_id.as_ref().map(|unique_id| {
-        // "root" token public key
-        let root_pk = PublicKey::default();
-        let parent_pk_bytes = output
-            .features
-            .parent_public_key
-            .as_ref()
-            .map(|pk| pk.as_bytes())
-            .unwrap_or_else(|| root_pk.as_bytes());
-        Blake256::new()
-            .chain(parent_pk_bytes)
-            .chain(unique_id)
-            .finalize()
-            .into()
-    })
-}
-
 #[cfg(test)]
 mod test {
-    use rand::rngs::OsRng;
     use tari_common::configuration::Network;
-    use tari_crypto::keys::PublicKey as PublicKeyTrait;
 
     use super::*;
     use crate::{
@@ -682,7 +644,6 @@ mod test {
             fee::Fee,
             tari_amount::MicroTari,
             test_helpers::{TestParams, UtxoTestParams},
-            transaction_components::OutputFeatures,
             weight::TransactionWeight,
             CryptoFactories,
             SenderTransactionProtocol,
@@ -724,12 +685,10 @@ mod test {
         });
 
         let tx_weight = TransactionWeight::latest();
-        unconfirmed_pool
-            .insert_many(
-                [tx1.clone(), tx2.clone(), tx3.clone(), tx4.clone(), tx5.clone()],
-                &tx_weight,
-            )
-            .unwrap();
+        unconfirmed_pool.insert_many(
+            [tx1.clone(), tx2.clone(), tx3.clone(), tx4.clone(), tx5.clone()],
+            &tx_weight,
+        );
         // Check that lowest priority tx was removed to make room for new incoming transactions
         assert!(unconfirmed_pool.has_tx_with_excess_sig(&tx1.body.kernels()[0].excess_sig));
         assert!(!unconfirmed_pool.has_tx_with_excess_sig(&tx2.body.kernels()[0].excess_sig));
@@ -788,7 +747,7 @@ mod test {
             .unwrap();
 
         let factories = CryptoFactories::default();
-        let mut stx_protocol = stx_builder.build::<Blake256>(&factories, None, u64::MAX).unwrap();
+        let mut stx_protocol = stx_builder.build(&factories, None, u64::MAX).unwrap();
         stx_protocol.finalize(&factories, None, u64::MAX).unwrap();
 
         let tx3 = stx_protocol.get_transaction().unwrap().clone();
@@ -803,9 +762,7 @@ mod test {
         });
 
         let tx_weight = TransactionWeight::latest();
-        unconfirmed_pool
-            .insert_many(vec![tx1.clone(), tx2.clone(), tx3.clone()], &tx_weight)
-            .unwrap();
+        unconfirmed_pool.insert_many(vec![tx1.clone(), tx2.clone(), tx3.clone()], &tx_weight);
         assert_eq!(unconfirmed_pool.len(), 3);
 
         let desired_weight = tx1.calculate_weight(&tx_weight) +
@@ -835,12 +792,10 @@ mod test {
             storage_capacity: 10,
             weight_tx_skip_count: 3,
         });
-        unconfirmed_pool
-            .insert_many(
-                vec![tx1.clone(), tx2.clone(), tx3.clone(), tx4.clone(), tx5.clone()],
-                &tx_weight,
-            )
-            .unwrap();
+        unconfirmed_pool.insert_many(
+            vec![tx1.clone(), tx2.clone(), tx3.clone(), tx4.clone(), tx5.clone()],
+            &tx_weight,
+        );
         // utx6 should not be added to unconfirmed_pool as it is an unknown transactions that was included in the block
         // by another node
 
@@ -885,19 +840,17 @@ mod test {
             storage_capacity: 10,
             weight_tx_skip_count: 3,
         });
-        unconfirmed_pool
-            .insert_many(
-                vec![
-                    tx1.clone(),
-                    tx2.clone(),
-                    tx3.clone(),
-                    tx4.clone(),
-                    tx5.clone(),
-                    tx6.clone(),
-                ],
-                &tx_weight,
-            )
-            .unwrap();
+        unconfirmed_pool.insert_many(
+            vec![
+                tx1.clone(),
+                tx2.clone(),
+                tx3.clone(),
+                tx4.clone(),
+                tx5.clone(),
+                tx6.clone(),
+            ],
+            &tx_weight,
+        );
 
         // The publishing of tx1 and tx3 will be double-spends and orphan tx5 and tx6
         let published_block = create_orphan_block(0, vec![(*tx1).clone(), (*tx2).clone(), (*tx3).clone()], &consensus);
@@ -941,7 +894,7 @@ mod test {
             Arc::new(tx3.clone()),
             Arc::new(tx4.clone()),
         ];
-        unconfirmed_pool.insert_many(txns.clone(), &tx_weight).unwrap();
+        unconfirmed_pool.insert_many(txns.clone(), &tx_weight);
 
         for txn in txns {
             for output in txn.as_ref().body.outputs() {
@@ -998,64 +951,6 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_multiple_transactions_with_same_unique_id() {
-        let unique_id = vec![1, 2, 3];
-        let (_, parent_pk) = PublicKey::random_keypair(&mut OsRng);
-        let nft_features = OutputFeatures {
-            unique_id: Some(unique_id.clone()),
-            parent_public_key: Some(parent_pk.clone()),
-            ..Default::default()
-        };
-
-        let (tx1, _, _) =
-            tx!(MicroTari(150_000), fee: MicroTari(50), inputs:5, outputs:1, features: nft_features.clone());
-        let (tx2, _, _) = tx!(MicroTari(250_000), fee: MicroTari(50), inputs:5, outputs:5);
-        let (tx3, _, _) = tx!(MicroTari(350_000), fee: MicroTari(51), inputs:5, outputs:1, features: nft_features);
-        let (tx4, _, _) = tx!(MicroTari(450_000), fee: MicroTari(50), inputs:5, outputs:5);
-
-        let tx_weight = TransactionWeight::latest();
-        let mut unconfirmed_pool = UnconfirmedPool::new(UnconfirmedPoolConfig {
-            storage_capacity: 10,
-            weight_tx_skip_count: 3,
-        });
-
-        let tx1 = Arc::new(tx1);
-        let tx2 = Arc::new(tx2);
-        let tx3 = Arc::new(tx3);
-        let tx4 = Arc::new(tx4);
-        unconfirmed_pool
-            .insert_many(vec![tx1.clone(), tx2.clone(), tx3.clone(), tx4.clone()], &tx_weight)
-            .unwrap();
-        let expected_hash: [u8; 32] = Blake256::new()
-            .chain(parent_pk.as_bytes())
-            .chain(&unique_id)
-            .finalize()
-            .into();
-        let entry = unconfirmed_pool.txs_by_unique_id.get(&expected_hash).unwrap();
-        let tx_id1 = unconfirmed_pool
-            .txs_by_signature
-            .get(tx1.first_kernel_excess_sig().unwrap().get_signature())
-            .unwrap()
-            .first()
-            .copied()
-            .unwrap();
-        let tx_id2 = unconfirmed_pool
-            .txs_by_signature
-            .get(tx3.first_kernel_excess_sig().unwrap().get_signature())
-            .unwrap()
-            .first()
-            .copied()
-            .unwrap();
-        assert_eq!(entry, &[tx_id1, tx_id2]);
-
-        let results = unconfirmed_pool.fetch_highest_priority_txs(100_000).unwrap();
-        assert!(results.retrieved_transactions.iter().any(|tx| *tx == tx2));
-        assert!(results.retrieved_transactions.iter().any(|tx| *tx == tx3));
-        assert!(results.retrieved_transactions.iter().any(|tx| *tx == tx4));
-        assert_eq!(results.retrieved_transactions.len(), 3);
-    }
-
     mod get_fee_per_gram_stats {
 
         use super::*;
@@ -1081,9 +976,7 @@ mod test {
             let tx2 = Arc::new(tx2);
             let tx3 = Arc::new(tx3);
             let tx4 = Arc::new(tx4);
-            unconfirmed_pool
-                .insert_many(vec![tx1, tx2, tx3, tx4], &tx_weight)
-                .unwrap();
+            unconfirmed_pool.insert_many(vec![tx1, tx2, tx3, tx4], &tx_weight);
 
             let stats = unconfirmed_pool.get_fee_per_gram_stats(1, 19500).unwrap();
             assert_eq!(stats[0].order, 0);
@@ -1121,7 +1014,7 @@ mod test {
             let tx_weight = TransactionWeight::latest();
             let mut unconfirmed_pool = UnconfirmedPool::new(UnconfirmedPoolConfig::default());
 
-            unconfirmed_pool.insert_many(transactions, &tx_weight).unwrap();
+            unconfirmed_pool.insert_many(transactions, &tx_weight);
 
             let stats = unconfirmed_pool.get_fee_per_gram_stats(2, 2000).unwrap();
             assert_eq!(stats, expected_stats);

@@ -83,7 +83,6 @@ pub fn setup_contacts_service<T: ContactsBackend + 'static>(
         peer_database_name: random::string(8),
         max_concurrent_inbound_tasks: 10,
         max_concurrent_outbound_tasks: 10,
-        outbound_buffer_size: 100,
         dht: DhtConfig {
             discovery_request_timeout: Duration::from_secs(1),
             auto_join: true,
@@ -98,6 +97,7 @@ pub fn setup_contacts_service<T: ContactsBackend + 'static>(
         listener_liveness_max_sessions: 0,
         user_agent: "tari/test-wallet".to_string(),
         rpc_max_simultaneous_sessions: 0,
+        rpc_max_sessions_per_peer: 0,
     };
     let peer_message_subscription_factory = Arc::new(subscription_factory);
     let shutdown = Shutdown::new();

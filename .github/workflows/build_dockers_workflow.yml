@@ -1,7 +1,7 @@
 ---
 name: Build docker images - workflow_call/on-demand
 
-on:
+'on':
   workflow_call:
     secrets:
       DOCKER_PROVIDER:
@@ -37,8 +37,10 @@ on:
         default: linux/amd64
 
 env:
-  LAUNCHPAD_REPO: tari-project/tari-launchpad
-  LAUNCHPAD_BRANCH: main
+#  LAUNCHPAD_REPO: tari-project/tari-launchpad
+#  LAUNCHPAD_BRANCH: main
+  LAUNCHPAD_REPO: leet4tari/tari-launchpad
+  LAUNCHPAD_BRANCH: build-leet-tari-improvements
 
 jobs:
   envs_setup:

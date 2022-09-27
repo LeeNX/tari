@@ -31,10 +31,10 @@ use tari_common_types::{chain_metadata::ChainMetadata, types::HashOutput};
 use tari_comms::{
     connectivity::ConnectivityRequester,
     peer_manager::NodeId,
-    protocol::rpc::{RpcError, RpcHandshakeError},
+    protocol::rpc::{RpcClient, RpcError, RpcHandshakeError},
     PeerConnection,
 };
-use tari_utilities::{hex::Hex, Hashable};
+use tari_utilities::hex::Hex;
 use tracing;
 
 use super::{validator::BlockHeaderSyncValidator, BlockHeaderSyncError};
@@ -88,7 +88,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
     }
 
     pub fn on_starting<H>(&mut self, hook: H)
-    where for<'r> H: FnOnce() + Send + Sync + 'static {
+    where for<'r> H: FnOnce(&SyncPeer) + Send + Sync + 'static {
         self.hooks.add_on_starting_hook(hook);
     }
 
@@ -104,7 +104,6 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
 
     pub async fn synchronize(&mut self) -> Result<SyncPeer, BlockHeaderSyncError> {
         debug!(target: LOG_TARGET, "Starting header sync.",);
-        self.hooks.call_on_starting_hook();
 
         info!(
             target: LOG_TARGET,
@@ -127,16 +126,31 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn try_sync_from_all_peers(&mut self, max_latency: Duration) -> Result<SyncPeer, BlockHeaderSyncError> {
         let sync_peer_node_ids = self.sync_peers.iter().map(|p| p.node_id()).cloned().collect::<Vec<_>>();
+        info!(
+            target: LOG_TARGET,
+            "Attempting to sync headers ({} sync peers)",
+            sync_peer_node_ids.len()
+        );
         for (i, node_id) in sync_peer_node_ids.iter().enumerate() {
+            {
+                let sync_peer = &self.sync_peers[i];
+                self.hooks.call_on_starting_hook(sync_peer);
+            }
             let mut conn = self.dial_sync_peer(node_id).await?;
             debug!(
                 target: LOG_TARGET,
                 "Attempting to synchronize headers with `{}`", node_id
             );
 
-            let mut client = conn.connect_rpc::<rpc::BaseNodeSyncRpcClient>().await?;
+            let config = RpcClient::builder()
+                .with_deadline(self.config.rpc_deadline)
+                .with_deadline_grace_period(Duration::from_secs(5));
+            let mut client = conn
+                .connect_rpc_using_builder::<rpc::BaseNodeSyncRpcClient>(config)
+                .await?;
 
             let latency = client
                 .get_last_request_latency()
@@ -174,7 +188,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
                 },
                 Err(ref err @ BlockHeaderSyncError::PeerSentInaccurateChainMetadata { claimed, actual, local }) => {
                     warn!(target: LOG_TARGET, "{}", err);
-                    self.ban_peer_long(node_id, BanReason::PeerCouldNotProvideStrongerChain {
+                    self.ban_peer_long(node_id, BanReason::PeerSentInaccurateChainMetadata {
                         claimed,
                         actual: actual.unwrap_or(0),
                         local,
@@ -208,6 +222,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
                     self.ban_peer_long(node_id, BanReason::GeneralHeaderSyncFailure(err))
                         .await?;
                 },
+                Err(err @ BlockHeaderSyncError::RpcError(RpcError::ReplyTimeout)) |
                 Err(err @ BlockHeaderSyncError::MaxLatencyExceeded { .. }) => {
                     warn!(target: LOG_TARGET, "{}", err);
                     if i == self.sync_peers.len() - 1 {
@@ -386,7 +401,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
             }
 
             let request = FindChainSplitRequest {
-                block_hashes: block_hashes.clone(),
+                block_hashes: block_hashes.clone().iter().map(|v| v.to_vec()).collect(),
                 header_count,
             };
 
@@ -527,7 +542,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
             local_tip_header,
             remote_tip_height,
             reorg_steps_back: steps_back,
-            chain_split_hash: chain_split_hash.clone(),
+            chain_split_hash: *chain_split_hash,
         };
         Ok(SyncStatus::Lagging(Box::new(chain_split_info)))
     }
@@ -568,13 +583,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
         let (start_header_height, start_header_hash, total_accumulated_difficulty) = self
             .header_validator
             .current_valid_chain_tip_header()
-            .map(|h| {
-                (
-                    h.height(),
-                    h.hash().clone(),
-                    h.accumulated_data().total_accumulated_difficulty,
-                )
-            })
+            .map(|h| (h.height(), *h.hash(), h.accumulated_data().total_accumulated_difficulty))
             .expect("synchronize_headers: expected there to be a valid tip header but it was None");
 
         // If we already have a stronger chain at this point, switch over to it.
@@ -615,7 +624,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
             sync_peer.node_id()
         );
         let request = SyncHeadersRequest {
-            start_hash: start_header_hash,
+            start_hash: start_header_hash.to_vec(),
             // To the tip!
             count: 0,
         };
@@ -773,7 +782,7 @@ impl<'a, B: BlockchainBackend + 'static> HeaderSynchronizer<'a, B> {
                 split_info.reorg_steps_back,
                 split_info.chain_split_hash.to_hex()
             );
-            let blocks = self.rewind_blockchain(split_info.chain_split_hash.clone()).await?;
+            let blocks = self.rewind_blockchain(split_info.chain_split_hash).await?;
             if !blocks.is_empty() {
                 self.hooks.call_on_rewind_hooks(blocks);
             }
@@ -822,6 +831,11 @@ enum BanReason {
         actual: String,
         expected: String,
     },
+    #[error(
+        "Peer sent inaccurate chain metadata. Claimed {claimed} but validated difficulty was {actual}, while local \
+         was {local}"
+    )]
+    PeerSentInaccurateChainMetadata { claimed: u128, actual: u128, local: u128 },
 }
 
 struct ChainSplitInfo {

@@ -52,16 +52,10 @@ use tari_crypto::ristretto::RistrettoPublicKey;
 use tari_shutdown::ShutdownSignal;
 use tari_utilities::hex::Hex;
 use tari_wallet::{
-    assets::Asset,
     base_node_service::{handle::BaseNodeEventReceiver, service::BaseNodeState},
     connectivity_service::{OnlineStatus, WalletConnectivityHandle, WalletConnectivityInterface},
     contacts_service::{handle::ContactsLivenessEvent, storage::database::Contact},
-    output_manager_service::{
-        handle::OutputManagerEventReceiver,
-        service::Balance,
-        storage::models::DbUnblindedOutput,
-    },
-    tokens::Token,
+    output_manager_service::{handle::OutputManagerEventReceiver, service::Balance, UtxoSelectionCriteria},
     transaction_service::{
         handle::TransactionEventReceiver,
         storage::models::{CompletedTransaction, TxCancellationReason},
@@ -181,33 +175,6 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn refresh_constitutions_state(&mut self) -> Result<(), UiError> {
-        let mut inner = self.inner.write().await;
-        inner.refresh_constitutions_state().await?;
-        if let Some(data) = inner.get_updated_app_state() {
-            self.cached_data = data;
-        }
-        Ok(())
-    }
-
-    pub async fn refresh_assets_state(&mut self) -> Result<(), UiError> {
-        let mut inner = self.inner.write().await;
-        inner.refresh_assets_state().await?;
-        if let Some(data) = inner.get_updated_app_state() {
-            self.cached_data = data;
-        }
-        Ok(())
-    }
-
-    pub async fn refresh_tokens_state(&mut self) -> Result<(), UiError> {
-        let mut inner = self.inner.write().await;
-        inner.refresh_tokens_state().await?;
-        if let Some(data) = inner.get_updated_app_state() {
-            self.cached_data = data;
-        }
-        Ok(())
-    }
-
     pub async fn update_cache(&mut self) {
         let update = match self.cache_update_cooldown {
             Some(last_update) => last_update.elapsed() > self.config.cache_update_cooldown,
@@ -250,9 +217,9 @@ impl AppState {
 
         let public_key = match CommsPublicKey::from_hex(public_key_or_emoji_id.as_str()) {
             Ok(pk) => pk,
-            Err(_) => {
-                EmojiId::str_to_pubkey(public_key_or_emoji_id.as_str()).map_err(|_| UiError::PublicKeyParseError)?
-            },
+            Err(_) => EmojiId::from_emoji_string(public_key_or_emoji_id.as_str())
+                .map_err(|_| UiError::PublicKeyParseError)?
+                .to_public_key(),
         };
 
         let contact = Contact::new(alias, public_key, None, None);
@@ -283,7 +250,9 @@ impl AppState {
         let mut inner = self.inner.write().await;
         let public_key = match CommsPublicKey::from_hex(public_key.as_str()) {
             Ok(pk) => pk,
-            Err(_) => EmojiId::str_to_pubkey(public_key.as_str()).map_err(|_| UiError::PublicKeyParseError)?,
+            Err(_) => EmojiId::from_emoji_string(public_key.as_str())
+                .map_err(|_| UiError::PublicKeyParseError)?
+                .to_public_key(),
         };
 
         inner.wallet.contacts_service.remove_contact(public_key).await?;
@@ -298,8 +267,7 @@ impl AppState {
         &mut self,
         public_key: String,
         amount: u64,
-        unique_id: Option<Vec<u8>>,
-        parent_public_key: Option<PublicKey>,
+        selection_criteria: UtxoSelectionCriteria,
         fee_per_gram: u64,
         message: String,
         result_tx: watch::Sender<UiTransactionSendStatus>,
@@ -307,20 +275,19 @@ impl AppState {
         let inner = self.inner.write().await;
         let public_key = match CommsPublicKey::from_hex(public_key.as_str()) {
             Ok(pk) => pk,
-            Err(_) => EmojiId::str_to_pubkey(public_key.as_str()).map_err(|_| UiError::PublicKeyParseError)?,
+            Err(_) => EmojiId::from_emoji_string(public_key.as_str())
+                .map_err(|_| UiError::PublicKeyParseError)?
+                .to_public_key(),
         };
 
-        let output_features = OutputFeatures {
-            unique_id,
-            parent_public_key,
-            ..Default::default()
-        };
+        let output_features = OutputFeatures { ..Default::default() };
 
         let fee_per_gram = fee_per_gram * uT;
         let tx_service_handle = inner.wallet.transaction_service.clone();
         tokio::spawn(send_transaction_task(
             public_key,
             MicroTari::from(amount),
+            selection_criteria,
             output_features,
             message,
             fee_per_gram,
@@ -335,8 +302,7 @@ impl AppState {
         &mut self,
         public_key: String,
         amount: u64,
-        unique_id: Option<Vec<u8>>,
-        parent_public_key: Option<PublicKey>,
+        selection_criteria: UtxoSelectionCriteria,
         fee_per_gram: u64,
         message: String,
         result_tx: watch::Sender<UiTransactionSendStatus>,
@@ -344,20 +310,19 @@ impl AppState {
         let inner = self.inner.write().await;
         let public_key = match CommsPublicKey::from_hex(public_key.as_str()) {
             Ok(pk) => pk,
-            Err(_) => EmojiId::str_to_pubkey(public_key.as_str()).map_err(|_| UiError::PublicKeyParseError)?,
+            Err(_) => EmojiId::from_emoji_string(public_key.as_str())
+                .map_err(|_| UiError::PublicKeyParseError)?
+                .to_public_key(),
         };
 
-        let output_features = OutputFeatures {
-            unique_id,
-            parent_public_key,
-            ..Default::default()
-        };
+        let output_features = OutputFeatures { ..Default::default() };
 
         let fee_per_gram = fee_per_gram * uT;
         let tx_service_handle = inner.wallet.transaction_service.clone();
         tokio::spawn(send_one_sided_transaction_task(
             public_key,
             MicroTari::from(amount),
+            selection_criteria,
             output_features,
             message,
             fee_per_gram,
@@ -372,8 +337,7 @@ impl AppState {
         &mut self,
         dest_pubkey: String,
         amount: u64,
-        unique_id: Option<Vec<u8>>,
-        parent_public_key: Option<PublicKey>,
+        selection_criteria: UtxoSelectionCriteria,
         fee_per_gram: u64,
         message: String,
         result_tx: watch::Sender<UiTransactionSendStatus>,
@@ -381,20 +345,19 @@ impl AppState {
         let inner = self.inner.write().await;
         let dest_pubkey = match CommsPublicKey::from_hex(dest_pubkey.as_str()) {
             Ok(pk) => pk,
-            Err(_) => EmojiId::str_to_pubkey(dest_pubkey.as_str()).map_err(|_| UiError::PublicKeyParseError)?,
+            Err(_) => EmojiId::from_emoji_string(dest_pubkey.as_str())
+                .map_err(|_| UiError::PublicKeyParseError)?
+                .to_public_key(),
         };
 
-        let output_features = OutputFeatures {
-            unique_id,
-            parent_public_key,
-            ..Default::default()
-        };
+        let output_features = OutputFeatures { ..Default::default() };
 
         let fee_per_gram = fee_per_gram * uT;
         let tx_service_handle = inner.wallet.transaction_service.clone();
         tokio::spawn(send_one_sided_to_stealth_address_transaction(
             dest_pubkey,
             MicroTari::from(amount),
+            selection_criteria,
             output_features,
             message,
             fee_per_gram,
@@ -428,14 +391,6 @@ impl AppState {
 
     pub fn get_identity(&self) -> &MyIdentity {
         &self.cached_data.my_identity
-    }
-
-    pub fn get_owned_constitutions(&self) -> &[DbUnblindedOutput] {
-        self.cached_data.owned_constitutions.as_slice()
-    }
-
-    pub fn get_owned_tokens(&self) -> &[Token] {
-        self.cached_data.owned_tokens.as_slice()
     }
 
     pub fn get_contacts(&self) -> &[UiContact] {
@@ -487,6 +442,7 @@ impl AppState {
                 .completed_txs
                 .iter()
                 .filter(|tx| !matches!(tx.cancelled, Some(TxCancellationReason::AbandonedCoinbase)))
+                .filter(|tx| !matches!(tx.status, TransactionStatus::Coinbase))
                 .collect()
         } else {
             self.cached_data.completed_txs.iter().collect()
@@ -804,8 +760,6 @@ impl AppStateInner {
                 });
             },
         }
-        self.refresh_assets_state().await?;
-        self.refresh_tokens_state().await?;
         self.updated = true;
         Ok(())
     }
@@ -818,7 +772,7 @@ impl AppStateInner {
             let online_status = self
                 .wallet
                 .contacts_service
-                .get_contact_online_status(contact.last_seen)
+                .get_contact_online_status(contact.clone())
                 .await?;
             ui_contacts.push(UiContact::from(contact.clone()).with_online_status(format!("{}", online_status)));
         }
@@ -844,27 +798,6 @@ impl AppStateInner {
             }
         }
         self.data.connected_peers = peers;
-        self.updated = true;
-        Ok(())
-    }
-
-    pub async fn refresh_constitutions_state(&mut self) -> Result<(), UiError> {
-        let constitutions = self.wallet.asset_manager.list_owned_constitutions().await?;
-        self.data.owned_constitutions = constitutions;
-        self.updated = true;
-        Ok(())
-    }
-
-    pub async fn refresh_assets_state(&mut self) -> Result<(), UiError> {
-        let asset_utxos = self.wallet.asset_manager.list_owned_assets().await?;
-        self.data.owned_assets = asset_utxos;
-        self.updated = true;
-        Ok(())
-    }
-
-    pub async fn refresh_tokens_state(&mut self) -> Result<(), UiError> {
-        let token_utxos = self.wallet.token_manager.list_owned_tokens().await?;
-        self.data.owned_tokens = token_utxos;
         self.updated = true;
         Ok(())
     }
@@ -974,15 +907,11 @@ impl AppStateInner {
         // persist the custom node in wallet db
         self.wallet
             .db
-            .set_client_key_value(CUSTOM_BASE_NODE_PUBLIC_KEY_KEY.to_string(), peer.public_key.to_string())
-            .await?;
-        self.wallet
-            .db
-            .set_client_key_value(
-                CUSTOM_BASE_NODE_ADDRESS_KEY.to_string(),
-                peer.addresses.first().ok_or(UiError::NoAddress)?.to_string(),
-            )
-            .await?;
+            .set_client_key_value(CUSTOM_BASE_NODE_PUBLIC_KEY_KEY.to_string(), peer.public_key.to_string())?;
+        self.wallet.db.set_client_key_value(
+            CUSTOM_BASE_NODE_ADDRESS_KEY.to_string(),
+            peer.addresses.first().ok_or(UiError::NoAddress)?.to_string(),
+        )?;
         info!(
             target: LOG_TARGET,
             "Setting custom base node peer for wallet: {}::{}",
@@ -1013,12 +942,10 @@ impl AppStateInner {
         // clear from wallet db
         self.wallet
             .db
-            .clear_client_value(CUSTOM_BASE_NODE_PUBLIC_KEY_KEY.to_string())
-            .await?;
+            .clear_client_value(CUSTOM_BASE_NODE_PUBLIC_KEY_KEY.to_string())?;
         self.wallet
             .db
-            .clear_client_value(CUSTOM_BASE_NODE_ADDRESS_KEY.to_string())
-            .await?;
+            .clear_client_value(CUSTOM_BASE_NODE_ADDRESS_KEY.to_string())?;
         Ok(())
     }
 
@@ -1094,25 +1021,6 @@ pub struct CompletedTransactionInfo {
     pub weight: u64,
     pub inputs_count: usize,
     pub outputs_count: usize,
-    pub unique_id: String,
-}
-
-fn first_unique_id(tx: &CompletedTransaction) -> String {
-    let body = tx.transaction.body();
-    for input in body.inputs() {
-        if let Ok(features) = input.features() {
-            if let Some(ref unique_id) = features.unique_id {
-                return unique_id.to_hex();
-            }
-        }
-    }
-    for output in body.outputs() {
-        if let Some(ref unique_id) = output.features.unique_id {
-            return unique_id.to_hex();
-        }
-    }
-
-    String::new()
 }
 
 impl CompletedTransactionInfo {
@@ -1126,7 +1034,6 @@ impl CompletedTransactionInfo {
         let weight = tx.transaction.calculate_weight(transaction_weighting);
         let inputs_count = tx.transaction.body.inputs().len();
         let outputs_count = tx.transaction.body.outputs().len();
-        let unique_id = first_unique_id(&tx);
 
         Self {
             tx_id: tx.tx_id,
@@ -1152,16 +1059,12 @@ impl CompletedTransactionInfo {
             weight,
             inputs_count,
             outputs_count,
-            unique_id,
         }
     }
 }
 
 #[derive(Clone)]
 struct AppStateData {
-    owned_constitutions: Vec<DbUnblindedOutput>,
-    owned_assets: Vec<Asset>,
-    owned_tokens: Vec<Token>,
     pending_txs: Vec<CompletedTransactionInfo>,
     completed_txs: Vec<CompletedTransactionInfo>,
     confirmations: HashMap<TxId, u64>,
@@ -1192,7 +1095,7 @@ impl AppStateData {
         base_node_selected: Peer,
         base_node_config: PeerConfig,
     ) -> Self {
-        let eid = EmojiId::from_pubkey(node_identity.public_key()).to_string();
+        let eid = EmojiId::from_public_key(node_identity.public_key()).to_emoji_string();
         let qr_link = format!("tari://{}/pubkey/{}", network, &node_identity.public_key().to_hex());
         let code = QrCode::new(qr_link).unwrap();
         let image = code
@@ -1235,9 +1138,6 @@ impl AppStateData {
         }
 
         AppStateData {
-            owned_constitutions: Vec::new(),
-            owned_assets: Vec::new(),
-            owned_tokens: Vec::new(),
             pending_txs: Vec::new(),
             completed_txs: Vec::new(),
             confirmations: HashMap::new(),

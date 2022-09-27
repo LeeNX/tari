@@ -85,7 +85,8 @@ Feature: Wallet FFI
         Then I don't have contact with alias ALIAS in ffi wallet FFI_WALLET
         And I stop ffi wallet FFI_WALLET
 
-    @critical
+    # TODO: Was broken due to #4525 - fix underway
+    @critical @broken
     Scenario: As a client I want to receive contact liveness events
         Given I have a seed node SEED
         # Contact liveness is based on P2P messaging; ensure connectivity by forcing 'DirectOnly'
@@ -137,8 +138,7 @@ Feature: Wallet FFI
         Then I want to view the transaction kernels for completed transactions in ffi wallet FFI_WALLET
         And I stop ffi wallet FFI_WALLET
 
-    #BROKEN: Sending via SAF works when running this test alone, but not when run with all other tests. Also works manually on dibbler
-    @critical @broken
+    @critical
     Scenario: As a client I want to receive Tari via my Public Key sent while I am offline when I come back online
         Given I have a seed node SEED
         And I have a base node BASE1 connected to all seed nodes
@@ -186,8 +186,7 @@ Feature: Wallet FFI
         Then wallet RECEIVER has at least 1 transactions that are all TRANSACTION_STATUS_FAUX_CONFIRMED and not cancelled
         And I stop ffi wallet FFI_WALLET
 
-    @critical @broken
-    # BROKEN: Runs fine when run by itself, but not with other tests - or maybe is flaky
+    @critical
     Scenario: As a client I want to receive a one-sided transaction
         Given I have a seed node SEED
         And I have a base node BASE1 connected to all seed nodes

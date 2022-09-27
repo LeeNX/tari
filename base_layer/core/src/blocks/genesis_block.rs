@@ -24,11 +24,8 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use tari_common::configuration::Network;
-use tari_common_types::types::{BulletRangeProof, Commitment, PrivateKey, PublicKey, Signature, BLOCK_HASH_LENGTH};
-use tari_crypto::{
-    signatures::CommitmentSignature,
-    tari_utilities::{hash::Hashable, hex::*},
-};
+use tari_common_types::types::{BulletRangeProof, Commitment, FixedHash, PrivateKey, PublicKey, Signature};
+use tari_crypto::{signatures::CommitmentSignature, tari_utilities::hex::*};
 use tari_script::script;
 
 use crate::{
@@ -75,26 +72,27 @@ pub fn get_igor_genesis_block() -> ChainBlock {
     // lets get the block
     let block = get_igor_genesis_block_raw();
 
-    // user this code to generate the correct header mr fields for igor if the gen block changes.
-    // use croaring::Bitmap;
-    // use tari_mmr::{MerkleMountainRange, MutableMmr};
-    // use tari_crypto::hash::blake2::Blake256;
+    // Use this code to generate the correct header mr fields for igor if the gen block changes.
     //
-    // let mut kernel_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
+    // use croaring::Bitmap;
+    //
+    // use crate::{KernelMmr, MutableOutputMmr, WitnessMmr};
+    //
+    // let mut kernel_mmr = KernelMmr::new(Vec::new());
     // for k in block.body.kernels() {
     //     println!("k: {}", k);
     //     kernel_mmr.push(k.hash()).unwrap();
     // }
     //
-    // let mut witness_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
-    // let mut output_mmr = MutableMmr::<Blake256, _>::new(Vec::new(), Bitmap::create()).unwrap();
+    // let mut witness_mmr = WitnessMmr::new(Vec::new());
+    // let mut output_mmr = MutableOutputMmr::new(Vec::new(), Bitmap::create()).unwrap();
     //
     // for o in block.body.outputs() {
     //     witness_mmr.push(o.witness_hash()).unwrap();
     //     output_mmr.push(o.hash()).unwrap();
     // }
     //
-    // println!("kernel mr: {}",kernel_mmr.get_merkle_root().unwrap().to_hex());
+    // println!("kernel mr: {}", kernel_mmr.get_merkle_root().unwrap().to_hex());
     // println!("witness mr: {}", witness_mmr.get_merkle_root().unwrap().to_hex());
     // println!("output mr: {}", output_mmr.get_merkle_root().unwrap().to_hex());
 
@@ -111,14 +109,16 @@ pub fn get_igor_genesis_block() -> ChainBlock {
 }
 
 fn get_igor_genesis_block_raw() -> Block {
+    // Note: Use print_new_genesis_block_igor in core/tests/helpers/block_builders.rs to generate the required fields
+    // below
     let sig = Signature::new(
-        PublicKey::from_hex("b4d81516b2cd8402a56639fe68ce0a9d9e73912573d659f98ad59268e93d6662").unwrap(),
-        PrivateKey::from_hex("ac4b4e9e3934c0c83457ef73e885e4db7bf76e8af2599ae56601fb33b2535f01").unwrap(),
+        PublicKey::from_hex("00f3a682fd38a79da6666301a727953ab55b880cd49b3c1bb24b2671756bce6a").unwrap(),
+        PrivateKey::from_hex("7dbba37445fadf0fa0a64fc0b52afa652fb487b92429634298d83d794b38d905").unwrap(),
     );
     let coinbase_meta_sig = CommitmentSignature::new(
-        Commitment::from_hex("fcbdc5e0323f53e866e6e2a1b67950befb8178d418d48840a7447e3dfed3b15f").unwrap(),
-        PrivateKey::from_hex("049449f8e8c5383fc5a0ef11292d0fa60258799bd504f060943e45c9c0741b0b").unwrap(),
-        PrivateKey::from_hex("50f09f1fa93e2dfab8a3826c00aa73af904e20a5d4e4a55cb26cce2f508b2306").unwrap(),
+        Commitment::from_hex("ac07390c975c96d3ebe6bc591571f31edd5426f89e0c5b8a8552d2bcdc335b43").unwrap(),
+        PrivateKey::from_hex("1a5c8bf91d85ac3a9bb616caae072f95f1a8629cbfec712a5f3cdb94981da502").unwrap(),
+        PrivateKey::from_hex("40976c932da8f0ee0adce6861fb3860639af6e38e280be0108bd80127ff78607").unwrap(),
     );
     let mut body = AggregateBody::new(
         vec![],
@@ -129,14 +129,14 @@ fn get_igor_genesis_block_raw() -> Block {
                 .. Default::default()
             },
             Commitment::from_hex(
-                "9e43749e3c3c2d4c64b5af6aa5b465f0be595b432089656fb4c60281e0c37372",
+                "acab973deac0b901fc966934f33e53e84be0902b863d6b31c07aee1077bb6d74",
             )
                 .unwrap(),
-            BulletRangeProof::from_hex("015eaff14d2c754884db429c2c5aab3328c65afd4a6947ae7861617f774f96ab01a4c0cf5e4ae46dc9b3c11ae3f01d755d589240f206747305c607aedbb31a3b51e8b009a1639e54db0cd3ab98ece1e0f363c1b823d4141bac15c1525234ab6d5dcc77e7447a7617e550a54168ff5347047f84de7a64140b63a6e695e86138aa7d46fd56aa774102214610665fc18b26ddb17f16ea262ceb573711b276eabdf33586551dd16e4265df736610a1239f986a73404a58cf6f83fa9acb5fa3225d87609a6fb7a4cff9c33e2ca93edbb51434c74685f950edb58bfe0dc29f3827588a6c14128763e8085decc4982c6ae5d3f944e52588b6a501b1289a4ef4d30883854360b93412d25f323627139d591bdbb91a5b175322a379ea2cdbbfb81f9e0af56352fcbb9082fd8e7616a810a83f8d26f3a4f6b4568aabd88b57bc8747c833921f0cc8431a991922aa5b69ad2a5c58a10eee09668e85784c58c0150d0f4022473056870677acedd1fe336f1c8bafe888ec8a7293f6e689a6854ebbc6e99b76fa21ca5b19a4bdca5982f266dae0c573facf5a01e0a55000b9b789eae8f5551ad3536eccc3064617e6f2b4b2641eb033753e17fb2a65390952b5c2923c5596e1e16ee24aba2013b9437032f8c90bf57ecc88bf72c249dc6570e742f9616ca4e21e3ca507085b62f8d532c4add40bcef53a1558fae7e89e9cd360bfcacc5603244508ebb223a54256d20ba52b91e6d82fe130e24d079bc9b116afa4664c0925d38c0ca064ccf210f02e60d85809d076d323a6ea9a6b3970a0d1192ed72622c5f6c600").unwrap(),
+            BulletRangeProof::from_hex("015af6dfef9563da065ac5d55eee0acda4a321222c75ef5c4415b0968c4f923d4f62cef4b10f247b4ccfcde7c83dff19605301af7c79a08d9bdd78d6911b3c2d017e124a1787a7f2bc7fe0f4785d11ce979c7d22774f9c45c063767144cc94c53d64936606452e2fb278094fb91ff3fc4eda9791e8f27f124bca489c3f7c979e04a2a42074c4aa23551a1cb1b132c2af01b9b3541632aaeaef0b2be48f7e61465d2829f7719eaff4127f5d19217ff6a36a19ea8bfb22aa0a453882528a6488be3d4652f275dc82f675eedebe6c32a691e80da39a48a833d26e07b733a253c804382286a3d6d9563d1c42fd4894694c70f07dcbaa21d014dbf900d2a176ce147326dc73e344cbdbc7866034693680bc7b4396bb1b1e1e6995d3564ae7c3884447561019ecbd60b45804aae214115320e2768565e1a145504e9dc95aed921824cd0c6083fefe5a328f17759f47e9288e57dad841e56b1a2a34b2d1416b4c7758e425c2b5925e957a3b78bec21f05c6bd7e0b4c259bc500247f4b0068134a343a90659a48e2ac11f2b1f890352c3b260fa78cb16d0a1d5459c6411ba34993bac7da6c1a662787ee15146a3c8623dff7fb7fa4143caeb431f53c6be02ef260d36eeb209273ff1c5a50413f61d8046ae6bac9e17c198503d602c10165d17522519aa7306b39661e3200a65fe234f67e125e80bdf46019f422325af7743d3ef873bb3e0ba2b2ca472170bd25168ad83870af30245ec5e7f464d2119054f76be999f90d07510193e01135ce0f16026b00128913fae48f2f8612a1fd5f7e4e40cb33c36c09").unwrap(),
             // For genesis block: A default script can never be spent, intentionally
             script!(Nop),
             // Script offset never checked for coinbase, thus can use default
-            PublicKey::from_hex("383977b6d4e6f1a572c65e50cafcbef2f86ce5b422447347661a040b0ed8f534").unwrap(),
+            PublicKey::from_hex("7048544e58d20ae730105da01a0bdb2cd3b968c15a030a7d280ac69d7a7a1f30").unwrap(),
             // For genesis block: Metadata signature will never be checked
             coinbase_meta_sig,
             Covenant::default(),
@@ -149,7 +149,7 @@ fn get_igor_genesis_block_raw() -> Block {
             MicroTari(0),
             0,
             Commitment::from_hex(
-                "886df7670975f532d880c92dfc13ed9c69a91e926382cfb128aa8590a88a4a24",
+                "8ecaca61f68daea32874526b81aa909dd6b36e807b7825ad3d2943070bb30f1e",
             )
                 .unwrap(),
             sig,None
@@ -158,21 +158,22 @@ fn get_igor_genesis_block_raw() -> Block {
     );
     body.sort();
     // set genesis timestamp
-    let genesis = DateTime::parse_from_rfc2822("08 Aug 2022 10:00:00 +0200").unwrap();
+    let genesis = DateTime::parse_from_rfc2822("30 Aug 2022 11:48:00 +0100").unwrap();
     #[allow(clippy::cast_sign_loss)]
     let timestamp = genesis.timestamp() as u64;
     Block {
         header: BlockHeader {
             version: 0,
             height: 0,
-            prev_hash: vec![0; BLOCK_HASH_LENGTH],
+            prev_hash: FixedHash::zero(),
             timestamp: timestamp.into(),
-            output_mr: from_hex("5cc6ab2569eea3b659ec1d7e6cc26d38ad906a6487eab95b70df37058e1121a4").unwrap(),
-            witness_mr: from_hex("76cac93115260256e50fe49c75e66d5fb007f57aa3af64f05e395e3fb17ef05e").unwrap(),
+            output_mr: FixedHash::from_hex("30e3813df61c3fb129c92f78e32422b362a12f6610e13adc6c8d7f6b952443e5").unwrap(),
+            witness_mr: FixedHash::from_hex("6adf5e059d7fc60e1c5a0954556adf8246d5c60554fce7d2fddcb338a870acd8")
+                .unwrap(),
             output_mmr_size: 1,
-            kernel_mr: from_hex("ac0346f6f2fb0031269d59f88d90eb9c143d89d8dff424eba05a3e34757c2f9d").unwrap(),
+            kernel_mr: FixedHash::from_hex("22e57d85985535c197554232f9d223dc3575d57378ef7a4198905ebb515daf71").unwrap(),
             kernel_mmr_size: 1,
-            input_mr: vec![0; BLOCK_HASH_LENGTH],
+            input_mr: FixedHash::zero(),
             total_kernel_offset: PrivateKey::from_hex(
                 "0000000000000000000000000000000000000000000000000000000000000000",
             )
@@ -213,37 +214,40 @@ pub fn get_esmeralda_genesis_block() -> ChainBlock {
     block.body.sort();
 
     // Use this code if you need to generate new Merkle roots
-    // NB: `esmerlada_genesis_sanity_check` must pass
-
-    // use croaring::Bitmap;
-    // use tari_crypto::hash::blake2::Blake256;
-    // use tari_mmr::{MerkleMountainRange, MutableMmr};
+    // NB: `esmeralda_genesis_sanity_check` must pass
     //
-    // let mut kernel_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
+    // use croaring::Bitmap;
+    // use std::convert::TryFrom;
+    // use crate::{KernelMmr, MutableOutputMmr, WitnessMmr};
+
+    // let mut kernel_mmr = KernelMmr::new(Vec::new());
     // for k in block.body.kernels() {
     //     println!("k: {}", k);
-    //     kernel_mmr.push(k.hash()).unwrap();
+    //     kernel_mmr.push(k.hash().to_vec()).unwrap();
     // }
-    //
-    // let mut witness_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
-    // let mut output_mmr = MutableMmr::<Blake256, _>::new(Vec::new(), Bitmap::create()).unwrap();
-    //
+
+    // let mut witness_mmr = WitnessMmr::new(Vec::new());
+    // let mut output_mmr = MutableOutputMmr::new(Vec::new(), Bitmap::create()).unwrap();
+
     // for o in block.body.outputs() {
-    //     witness_mmr.push(o.witness_hash()).unwrap();
-    //     output_mmr.push(o.hash()).unwrap();
+    //     witness_mmr.push(o.witness_hash().to_vec()).unwrap();
+    //     output_mmr.push(o.hash().to_vec()).unwrap();
     // }
-    //
-    // block.header.kernel_mr = kernel_mmr.get_merkle_root().unwrap();
-    // block.header.witness_mr = witness_mmr.get_merkle_root().unwrap();
-    // block.header.output_mr = output_mmr.get_merkle_root().unwrap();
+
+    // block.header.kernel_mr = FixedHash::try_from(kernel_mmr.get_merkle_root().unwrap()).unwrap();
+    // block.header.witness_mr = FixedHash::try_from(witness_mmr.get_merkle_root().unwrap()).unwrap();
+    // block.header.output_mr = FixedHash::try_from(output_mmr.get_merkle_root().unwrap()).unwrap();
     // println!("kernel mr: {}", block.header.kernel_mr.to_hex());
     // println!("witness mr: {}", block.header.witness_mr.to_hex());
     // println!("output mr: {}", block.header.output_mr.to_hex());
 
     // Hardcode the Merkle roots once they've been computed above
-    block.header.kernel_mr = from_hex("7335c07777472b7e0cbd0cc19889581aa0230fac6de28a8705809e6e0560ed63").unwrap();
-    block.header.witness_mr = from_hex("81ef01da185ea7f6865b7043e4a9130d58182a46bc34059bba048c8a9313d731").unwrap();
-    block.header.output_mr = from_hex("822a833a1bb1fbfe179682be0e121f31453eef499db7ab03ace78bd50658140a").unwrap();
+    block.header.kernel_mr =
+        FixedHash::from_hex("49bec44ce879f529523c593d2f533fffdc2823512d673e78e1bb6b2c28d9fcf5").unwrap();
+    block.header.witness_mr =
+        FixedHash::from_hex("8e6bb075239bf307e311f497d35c12c77c4563f218c156895e6630a7d9633de3").unwrap();
+    block.header.output_mr =
+        FixedHash::from_hex("163304b3fe0f9072170db341945854bf88c8e23e23ecaac3ed86b9231b20e16f").unwrap();
 
     let accumulated_data = BlockHeaderAccumulatedData {
         hash: block.hash(),
@@ -258,37 +262,32 @@ pub fn get_esmeralda_genesis_block() -> ChainBlock {
 }
 
 fn get_esmeralda_genesis_block_raw() -> Block {
-    // Note: Use print_new_genesis_block in core/tests/helpers/block_builders.rs to generate the required fields below
+    // Note: Use print_new_genesis_block_esmeralda in core/tests/helpers/block_builders.rs to generate the required
+    // fields below
     let excess_sig = Signature::new(
-        PublicKey::from_hex("b4e82e14ab54f7fe025a832160ae589fbd2ccd8daa66d04e0e3c058b23c5d339").unwrap(),
-        PrivateKey::from_hex("c40cd89e2433f8ace92f544d291a8cc65686c2512cc6e1d01f68cf8856f3630e").unwrap(),
+        PublicKey::from_hex("70e343b603ec1e0422b02e68d1051675e48b1d7aa26a46d79c0fa104762e1161").unwrap(),
+        PrivateKey::from_hex("8d9ea6626b108ff5479c6378f605a9ffa9e3908ca2e374797d45957a26e9810b").unwrap(),
     );
     let coinbase_meta_sig = CommitmentSignature::new(
-        Commitment::from_hex("1875cb95dc182a7186259af680b9ea4c2443850de37fac23928cbd5130d0af0d").unwrap(),
-        PrivateKey::from_hex("2f9d7e2a3e7ca12ed91e8e24c159d3274e871407fe72f220faab47fa46bde904").unwrap(),
-        PrivateKey::from_hex("39864d07c8c1134ce515a56ed56f35bddebb803bc944c0b9f0f588b5f19d3602").unwrap(),
+        Commitment::from_hex("2432288b75a39e102de18a4556533bd340e0e6fd682d7d405fd5c9d834eb0f65").unwrap(),
+        PrivateKey::from_hex("3dbc5debc8cd2d983bc09322488bc0cd60531e198f2925b2d0175ff0ef0efa0f").unwrap(),
+        PrivateKey::from_hex("12cb8b669a8d16d78f2760529b651adc8213c41364c861cc0a2e218a0ce3db0a").unwrap(),
     );
     let coinbase = TransactionOutput::new(
         TransactionOutputVersion::get_current_version(),
         OutputFeatures {
             version: OutputFeaturesVersion::get_current_version(),
             output_type: OutputType::Coinbase,
-            maturity: 3,
+            maturity: 6,
             metadata: Vec::new(),
-            unique_id: None,
             sidechain_features: None,
-            parent_public_key: None,
-            asset: None,
-            mint_non_fungible: None,
-            sidechain_checkpoint: None,
-            committee_definition: None,
         },
-        Commitment::from_hex("00d6e2617fc58804c6c1723df20ad3941f66aecbf079f205a9ad5ba9c84b7d5b").unwrap(),
-        BulletRangeProof::from_hex("01b04258b14f2093e796290ba4e011e71745d38c6d59d47eee509f33fff8c0c467e23d95553482c3e48382f068841e8bc40238e53886a38148ab05ea0bcbe35e12e075c2b3ec2ed7a81d72b31c5a7c79c391bc5aec841917f01fa656220baac6370a1458732f50c0bb16b18058c52a0fb6dfdce745078f318055f66eb81d911b365032bb9672cce7d4fddaefadabbc35cd3b16782012ccbfedc774650eda66df53fe97c1c3b69feadd141865bfd218a20d7d9e1032957bcb87f28ad984b9a81b45b8869314bd39d7fec662270b5988b5e247b5c37f54132b37af115a61f40fef2cc2d696ca7413fb2a037dae574fbbd854d6fa4cec956088975ae2450e98a19c3492098ac1efe95c4b73deef206c03394a25679d03e89e74a626bec9b6a5c7104b5ca7e152119dc08b393238eeca34388d7364dcc6e13ffb1f57b3c038219a7f4b8043a6378e8310d2c6f229f716b438064d7b359717010118bf8860f7ae61a422104a73bd4c5d36538b5112dd0beb293b463bd3d15f4c847a8c848c7369bd395dfefd18ab6d1cf6e41f02916caa3659580149d31c33c1c4c2fb6645cef528a4704865d3f905fc12bba1c2469e3379999ad63c1266e73a7b9726ac99cc3700d5325aab127d74c4b025977ef9d2fcea26be519c1b2e8727e58ac943684e35e38c7d92217c8b2981a423a77849b94ec05d6b89700937916be5e31c74d8ba854af0023b6770b68962ca7e94123a1e8b13cef5844d0f8405ca89c0dbd56c6d1f96bc070077afcf72f55eb8375444f9d038bcb8b88ded2cb7abb7fb22d021581191b205").unwrap(),
+        Commitment::from_hex("46eec110cf173557e149d453734f6707fea9ed27c9a0dd0276bb43eb1f6e3322").unwrap(),
+        BulletRangeProof::from_hex("01b05c72ea976764b8f9a56bb302990829dacae5f9b2d26e028e97c66a7ac3a14c7809ea5da55fb1e88a16195619d67381f28181b1ad7e0c9661c726e1c56ad7770eb75e314b51a89d716a2dd7737b26a40d8e956911ff45d4c47a1164edae5505aaca58ec6f95762daaa02545dc2ce502e9892d98422849352b6dbcc3322b6b1adae4d33461dd8b5b75b4a9bf52b3e3b00ef7579b16e59f17f43c45ea5e82db063c23ce2d214f93a211cd8f7a3cb220071c68ba3a348b082c3eebb8b6d6339d18decd0372b82e762a9f16e5e7ed23b21c1025ba093b676c55cfa603d888bcc315bc95e8e4bebad9ec51124aab0fe4a8abfc9053db1fb1560c5214b9485826e0127448a2aa84c25f17c5833b15bf434903db7a676bfb11ace2ece255b018428457122da112d481c8a742f916cca069b874e6762248fbb00fa6895f7d4b8a9a8829164baf6ad1d3ad5775c679766ead9da782977fdeb5af7e4b2eb6828e87551179f888ed1c598dd1b81c46b335fb4a827fadf7669e007ff4ed6f260d0bde3eb42282983f58bb0f11a44e064a80503154f4cdb76537192411b2755c2b453b90b3754e9253e64837f15c933b7a479fbb9b1ea8d45364fff67b4aa71ecf67f16c497b5846ff50aaae882e71ac5e6f3ba29189d03da3ed91511074747db413a3e8f90fd9b8fa0751e8ecde29324f4fe8d9023405e33e0d07741056941f9593e8931d0c22553af6447d5c38c762e45afaa89cc11c6843e77430cea44b41fcef0ad11d08d3be1f279ee791fd3b4a8b39d2889a51a4cb2a81885ef6cab119e8de29908a0e").unwrap(),
         // A default script can never be spent, intentionally
         script!(Nop),
         // The Sender offset public key is not checked for coinbase outputs
-        PublicKey::from_hex("263adc1c006b85ac62df5e82e25274655ade2680ee6372e9291af031b0a3c025").unwrap(),
+        PublicKey::from_hex("f649c442e31f6633099549d08870f6c16e1265af797c941ab93a264aba53ff69").unwrap(),
         // For genesis block: Metadata signature will never be checked
         coinbase_meta_sig,
         // Covenant
@@ -302,28 +301,29 @@ fn get_esmeralda_genesis_block_raw() -> Block {
         KernelFeatures::COINBASE_KERNEL,
         MicroTari(0),
         0,
-        Commitment::from_hex("8e81612b46e718305fc18c1a1058450ff1799ec22fc538b29f065026791c5c05").unwrap(),
+        Commitment::from_hex("c88376c6b1cd801821e18f199012f07eae50078177c0406fee3bff7f851e5e66").unwrap(),
         excess_sig,
         None,
     );
     let mut body = AggregateBody::new(vec![], vec![coinbase], vec![kernel]);
     body.sort();
     // set genesis timestamp
-    let genesis = DateTime::parse_from_rfc2822("08 Aug 2022 10:00:00 +0200").unwrap();
+    let genesis = DateTime::parse_from_rfc2822("30 Aug 2022 11:45:00 +0100").unwrap();
     #[allow(clippy::cast_sign_loss)]
     let timestamp = genesis.timestamp() as u64;
     Block {
         header: BlockHeader {
             version: 0,
             height: 0,
-            prev_hash: vec![0; BLOCK_HASH_LENGTH],
+            prev_hash: FixedHash::zero(),
             timestamp: timestamp.into(),
-            output_mr: from_hex("867e4bfa4a5731652d49a7cd32a6ddcacc3473b8b8f446f6d7366aa671eb3842").unwrap(),
-            witness_mr: from_hex("36034e90dbf56b54fcc63fb26a6200a15b9fdb4957834d7de42ee3ada1aaaa00").unwrap(),
+            output_mr: FixedHash::from_hex("e6fbb394caca64f9fd2e68cbd0406a279c7c7d0e942281934530711e3030f4e8").unwrap(),
+            witness_mr: FixedHash::from_hex("68c0fa430ec073acea47116ebd23ba896df86217dd016f3a131d455cadc3c246")
+                .unwrap(),
             output_mmr_size: 1,
-            kernel_mr: from_hex("8ecc03eba1c5ee9ba7e5069c723e74587535eccbc06ce9149f6d4a0469900ffa").unwrap(),
+            kernel_mr: FixedHash::from_hex("157ab76af27428ff7bca4d910908bae698df34a6dcaf43a1d11a97fa3e67539a").unwrap(),
             kernel_mmr_size: 1,
-            input_mr: vec![0; BLOCK_HASH_LENGTH],
+            input_mr: FixedHash::zero(),
             total_kernel_offset: PrivateKey::from_hex(
                 "0000000000000000000000000000000000000000000000000000000000000000",
             )
@@ -347,8 +347,6 @@ mod test {
 
     use croaring::Bitmap;
     use tari_common_types::types::Commitment;
-    use tari_crypto::hash::blake2::Blake256;
-    use tari_mmr::{MerkleMountainRange, MutableMmr};
 
     use super::*;
     use crate::{
@@ -356,6 +354,9 @@ mod test {
         test_helpers::blockchain::create_new_blockchain_with_network,
         transactions::{transaction_components::transaction_output::batch_verify_range_proofs, CryptoFactories},
         validation::{ChainBalanceValidator, FinalHorizonStateValidation},
+        KernelMmr,
+        MutableOutputMmr,
+        WitnessMmr,
     };
 
     #[test]
@@ -390,24 +391,33 @@ mod test {
             .any(|k| k.features.contains(KernelFeatures::COINBASE_KERNEL)));
 
         // Check MMR
-        let mut kernel_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
+        let mut kernel_mmr = KernelMmr::new(Vec::new());
         for k in block.block().body.kernels() {
-            kernel_mmr.push(k.hash()).unwrap();
+            kernel_mmr.push(k.hash().to_vec()).unwrap();
         }
 
-        let mut witness_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
-        let mut output_mmr = MutableMmr::<Blake256, _>::new(Vec::new(), Bitmap::create()).unwrap();
+        let mut witness_mmr = WitnessMmr::new(Vec::new());
+        let mut output_mmr = MutableOutputMmr::new(Vec::new(), Bitmap::create()).unwrap();
 
         for o in block.block().body.outputs() {
             o.verify_metadata_signature().unwrap();
 
-            witness_mmr.push(o.witness_hash()).unwrap();
-            output_mmr.push(o.hash()).unwrap();
+            witness_mmr.push(o.witness_hash().to_vec()).unwrap();
+            output_mmr.push(o.hash().to_vec()).unwrap();
         }
 
-        assert_eq!(kernel_mmr.get_merkle_root().unwrap(), block.header().kernel_mr);
-        assert_eq!(witness_mmr.get_merkle_root().unwrap(), block.header().witness_mr);
-        assert_eq!(output_mmr.get_merkle_root().unwrap(), block.header().output_mr);
+        assert_eq!(
+            kernel_mmr.get_merkle_root().unwrap().as_slice(),
+            block.header().kernel_mr.as_slice()
+        );
+        assert_eq!(
+            witness_mmr.get_merkle_root().unwrap().as_slice(),
+            block.header().witness_mr.as_slice()
+        );
+        assert_eq!(
+            output_mmr.get_merkle_root().unwrap().as_slice(),
+            block.header().output_mr.as_slice()
+        );
 
         // Check that the faucet UTXOs balance (the faucet_value consensus constant is set correctly and faucet kernel
         // is correct)
@@ -456,23 +466,32 @@ mod test {
             .any(|k| k.features.contains(KernelFeatures::COINBASE_KERNEL)));
 
         // Check MMR
-        let mut kernel_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
+        let mut kernel_mmr = KernelMmr::new(Vec::new());
         for k in block.block().body.kernels() {
-            kernel_mmr.push(k.hash()).unwrap();
+            kernel_mmr.push(k.hash().to_vec()).unwrap();
         }
 
-        let mut witness_mmr = MerkleMountainRange::<Blake256, _>::new(Vec::new());
-        let mut output_mmr = MutableMmr::<Blake256, _>::new(Vec::new(), Bitmap::create()).unwrap();
+        let mut witness_mmr = WitnessMmr::new(Vec::new());
+        let mut output_mmr = MutableOutputMmr::new(Vec::new(), Bitmap::create()).unwrap();
         assert_eq!(block.block().body.kernels().len(), 1);
         assert_eq!(block.block().body.outputs().len(), 1);
         for o in block.block().body.outputs() {
-            witness_mmr.push(o.witness_hash()).unwrap();
-            output_mmr.push(o.hash()).unwrap();
+            witness_mmr.push(o.witness_hash().to_vec()).unwrap();
+            output_mmr.push(o.hash().to_vec()).unwrap();
         }
 
-        assert_eq!(kernel_mmr.get_merkle_root().unwrap(), block.header().kernel_mr);
-        assert_eq!(witness_mmr.get_merkle_root().unwrap(), block.header().witness_mr);
-        assert_eq!(output_mmr.get_merkle_root().unwrap(), block.header().output_mr);
+        assert_eq!(
+            kernel_mmr.get_merkle_root().unwrap().as_slice(),
+            block.header().kernel_mr.as_slice()
+        );
+        assert_eq!(
+            witness_mmr.get_merkle_root().unwrap().as_slice(),
+            block.header().witness_mr.as_slice()
+        );
+        assert_eq!(
+            output_mmr.get_merkle_root().unwrap().as_slice(),
+            block.header().output_mr.as_slice()
+        );
 
         // Check that the faucet UTXOs balance (the faucet_value consensus constant is set correctly and faucet kernel
         // is correct)

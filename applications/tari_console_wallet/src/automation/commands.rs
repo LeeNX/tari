@@ -21,9 +21,10 @@
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use std::{
-    convert::TryFrom,
+    convert::TryInto,
     fs,
     fs::File,
+    io,
     io::{LineWriter, Write},
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -36,6 +37,7 @@ use log::*;
 use serde::{de::DeserializeOwned, Serialize};
 use sha2::Sha256;
 use strum_macros::{Display, EnumIter, EnumString};
+use tari_app_grpc::authentication::salted_password::create_salted_hashed_password;
 use tari_common_types::{
     emoji::EmojiId,
     transaction::TxId,
@@ -49,34 +51,14 @@ use tari_comms::{
 use tari_comms_dht::{envelope::NodeDestination, DhtDiscoveryRequester};
 use tari_core::transactions::{
     tari_amount::{uT, MicroTari, Tari},
-    transaction_components::{
-        CheckpointParameters,
-        ContractAcceptanceRequirements,
-        ContractAmendment,
-        ContractDefinition,
-        ContractUpdateProposal,
-        OutputFeatures,
-        SideChainConsensus,
-        SideChainFeatures,
-        TransactionOutput,
-        UnblindedOutput,
-    },
+    transaction_components::{OutputFeatures, TransactionOutput, UnblindedOutput},
 };
-use tari_utilities::{hex::Hex, ByteArray, Hashable};
+use tari_utilities::{hex::Hex, ByteArray};
 use tari_wallet::{
-    assets::{
-        ConstitutionChangeRulesFileFormat,
-        ConstitutionDefinitionFileFormat,
-        ContractAmendmentFileFormat,
-        ContractDefinitionFileFormat,
-        ContractSpecificationFileFormat,
-        ContractUpdateProposalFileFormat,
-        SignatureFileFormat,
-    },
     connectivity_service::WalletConnectivityInterface,
     error::WalletError,
-    key_manager_service::{KeyManagerInterface, NextKeyResult},
-    output_manager_service::{handle::OutputManagerHandle, resources::OutputManagerKeyManagerBranch},
+    key_manager_service::NextKeyResult,
+    output_manager_service::{handle::OutputManagerHandle, UtxoSelectionCriteria},
     transaction_service::handle::{TransactionEvent, TransactionServiceHandle},
     TransactionStage,
     WalletConfig,
@@ -89,17 +71,7 @@ use tokio::{
 
 use super::error::CommandError;
 use crate::{
-    automation::prompt::{HexArg, Optional, Prompt, YesNo},
-    cli::{
-        CliCommands,
-        ContractCommand,
-        ContractSubcommand,
-        InitAmendmentArgs,
-        InitConstitutionArgs,
-        InitDefinitionArgs,
-        InitUpdateProposalArgs,
-        PublishFileArgs,
-    },
+    cli::{CliCommands, MakeItRainTransactionType},
     utils::db::{CUSTOM_BASE_NODE_ADDRESS_KEY, CUSTOM_BASE_NODE_PUBLIC_KEY_KEY},
 };
 
@@ -146,10 +118,23 @@ pub async fn send_tari(
         .send_transaction(
             dest_pubkey,
             amount,
+            UtxoSelectionCriteria::default(),
             OutputFeatures::default(),
             fee_per_gram * uT,
             message,
         )
+        .await
+        .map_err(CommandError::TransactionServiceError)
+}
+
+pub async fn burn_tari(
+    mut wallet_transaction_service: TransactionServiceHandle,
+    fee_per_gram: u64,
+    amount: MicroTari,
+    message: String,
+) -> Result<TxId, CommandError> {
+    wallet_transaction_service
+        .burn_tari(amount, UtxoSelectionCriteria::default(), fee_per_gram * uT, message)
         .await
         .map_err(CommandError::TransactionServiceError)
 }
@@ -159,11 +144,12 @@ pub async fn init_sha_atomic_swap(
     mut wallet_transaction_service: TransactionServiceHandle,
     fee_per_gram: u64,
     amount: MicroTari,
+    selection_criteria: UtxoSelectionCriteria,
     dest_pubkey: PublicKey,
     message: String,
 ) -> Result<(TxId, PublicKey, TransactionOutput), CommandError> {
     let (tx_id, pre_image, output) = wallet_transaction_service
-        .send_sha_atomic_swap_transaction(dest_pubkey, amount, fee_per_gram * uT, message)
+        .send_sha_atomic_swap_transaction(dest_pubkey, amount, selection_criteria, fee_per_gram * uT, message)
         .await
         .map_err(CommandError::TransactionServiceError)?;
     Ok((tx_id, pre_image, output))
@@ -173,7 +159,7 @@ pub async fn init_sha_atomic_swap(
 pub async fn finalise_sha_atomic_swap(
     mut output_service: OutputManagerHandle,
     mut transaction_service: TransactionServiceHandle,
-    output_hash: Vec<u8>,
+    output_hash: FixedHash,
     pre_image: PublicKey,
     fee_per_gram: MicroTari,
     message: String,
@@ -191,7 +177,7 @@ pub async fn finalise_sha_atomic_swap(
 pub async fn claim_htlc_refund(
     mut output_service: OutputManagerHandle,
     mut transaction_service: TransactionServiceHandle,
-    output_hash: Vec<u8>,
+    output_hash: FixedHash,
     fee_per_gram: MicroTari,
     message: String,
 ) -> Result<TxId, CommandError> {
@@ -209,6 +195,7 @@ pub async fn send_one_sided(
     mut wallet_transaction_service: TransactionServiceHandle,
     fee_per_gram: u64,
     amount: MicroTari,
+    selection_criteria: UtxoSelectionCriteria,
     dest_pubkey: PublicKey,
     message: String,
 ) -> Result<TxId, CommandError> {
@@ -216,6 +203,7 @@ pub async fn send_one_sided(
         .send_one_sided_transaction(
             dest_pubkey,
             amount,
+            selection_criteria,
             OutputFeatures::default(),
             fee_per_gram * uT,
             message,
@@ -228,6 +216,7 @@ pub async fn send_one_sided_to_stealth_address(
     mut wallet_transaction_service: TransactionServiceHandle,
     fee_per_gram: u64,
     amount: MicroTari,
+    selection_criteria: UtxoSelectionCriteria,
     dest_pubkey: PublicKey,
     message: String,
 ) -> Result<TxId, CommandError> {
@@ -235,6 +224,7 @@ pub async fn send_one_sided_to_stealth_address(
         .send_one_sided_to_stealth_address_transaction(
             dest_pubkey,
             amount,
+            selection_criteria,
             OutputFeatures::default(),
             fee_per_gram * uT,
             message,
@@ -330,7 +320,7 @@ pub async fn make_it_rain(
     increase_amount: MicroTari,
     start_time: DateTime<Utc>,
     destination: PublicKey,
-    negotiated: bool,
+    transaction_type: MakeItRainTransactionType,
     message: String,
 ) -> Result<(), CommandError> {
     // We are spawning this command in parallel, thus not collecting transaction IDs
@@ -362,7 +352,6 @@ pub async fn make_it_rain(
             delayed_for: Duration,
             submit_time: Duration,
         }
-        let transaction_type = if negotiated { "negotiated" } else { "one-sided" };
         println!(
             "\n`make-it-rain` starting {} {} transactions \"{}\"\n",
             num_txs, transaction_type, message
@@ -398,15 +387,35 @@ pub async fn make_it_rain(
                 tokio::task::spawn(async move {
                     let spawn_start = Instant::now();
                     // Send transaction
-                    let tx_id = if negotiated {
-                        send_tari(tx_service, fee, amount, pk.clone(), msg.clone()).await
-                    } else {
-                        send_one_sided(tx_service, fee, amount, pk.clone(), msg.clone()).await
+                    let tx_id = match transaction_type {
+                        MakeItRainTransactionType::Interactive => {
+                            send_tari(tx_service, fee, amount, pk.clone(), msg.clone()).await
+                        },
+                        MakeItRainTransactionType::OneSided => {
+                            send_one_sided(
+                                tx_service,
+                                fee,
+                                amount,
+                                UtxoSelectionCriteria::default(),
+                                pk.clone(),
+                                msg.clone(),
+                            )
+                            .await
+                        },
+                        MakeItRainTransactionType::StealthOneSided => {
+                            send_one_sided_to_stealth_address(
+                                tx_service,
+                                fee,
+                                amount,
+                                UtxoSelectionCriteria::default(),
+                                pk.clone(),
+                                msg.clone(),
+                            )
+                            .await
+                        },
                     };
                     let submit_time = Instant::now();
-                    tokio::task::spawn(async move {
-                        print!("{} ", i + 1);
-                    });
+
                     if let Err(e) = sender_clone
                         .send(TransactionSendStats {
                             i: i + 1,
@@ -428,6 +437,8 @@ pub async fn make_it_rain(
         while let Some(send_stats) = receiver.recv().await {
             match send_stats.tx_id {
                 Ok(tx_id) => {
+                    print!("{} ", send_stats.i);
+                    io::stdout().flush().unwrap();
                     debug!(
                         target: LOG_TARGET,
                         "make-it-rain transaction {} ({}) submitted to queue, tx_id: {}, delayed for ({}ms), submit \
@@ -589,55 +600,102 @@ pub async fn command_runner(
         match parsed {
             GetBalance => match output_service.clone().get_balance().await {
                 Ok(balance) => {
+                    debug!(target: LOG_TARGET, "get-balance concluded");
                     println!("{}", balance);
                 },
                 Err(e) => eprintln!("GetBalance error! {}", e),
             },
             DiscoverPeer(args) => {
                 if !online {
-                    wait_for_comms(&connectivity_requester).await?;
-                    online = true;
+                    match wait_for_comms(&connectivity_requester).await {
+                        Ok(..) => {
+                            online = true;
+                        },
+                        Err(e) => {
+                            eprintln!("DiscoverPeer error! {}", e);
+                            continue;
+                        },
+                    }
                 }
-                discover_peer(dht_service.clone(), args.dest_public_key.into()).await?
+                if let Err(e) = discover_peer(dht_service.clone(), args.dest_public_key.into()).await {
+                    eprintln!("DiscoverPeer error! {}", e);
+                }
+            },
+            BurnTari(args) => {
+                match burn_tari(
+                    transaction_service.clone(),
+                    config.fee_per_gram,
+                    args.amount,
+                    args.message,
+                )
+                .await
+                {
+                    Ok(tx_id) => {
+                        debug!(target: LOG_TARGET, "burn tari concluded with tx_id {}", tx_id);
+                        tx_ids.push(tx_id);
+                    },
+                    Err(e) => eprintln!("BurnTari error! {}", e),
+                }
             },
             SendTari(args) => {
-                let tx_id = send_tari(
+                match send_tari(
                     transaction_service.clone(),
                     config.fee_per_gram,
                     args.amount,
                     args.destination.into(),
                     args.message,
                 )
-                .await?;
-                debug!(target: LOG_TARGET, "send-tari tx_id {}", tx_id);
-                tx_ids.push(tx_id);
+                .await
+                {
+                    Ok(tx_id) => {
+                        debug!(target: LOG_TARGET, "send-tari concluded with tx_id {}", tx_id);
+                        tx_ids.push(tx_id);
+                    },
+                    Err(e) => eprintln!("SendTari error! {}", e),
+                }
             },
             SendOneSided(args) => {
-                let tx_id = send_one_sided(
+                match send_one_sided(
                     transaction_service.clone(),
                     config.fee_per_gram,
                     args.amount,
+                    UtxoSelectionCriteria::default(),
                     args.destination.into(),
                     args.message,
                 )
-                .await?;
-                debug!(target: LOG_TARGET, "send-one-sided tx_id {}", tx_id);
-                tx_ids.push(tx_id);
+                .await
+                {
+                    Ok(tx_id) => {
+                        debug!(target: LOG_TARGET, "send-one-sided concluded with tx_id {}", tx_id);
+                        tx_ids.push(tx_id);
+                    },
+                    Err(e) => eprintln!("SendOneSided error! {}", e),
+                }
             },
             SendOneSidedToStealthAddress(args) => {
-                let tx_id = send_one_sided_to_stealth_address(
+                match send_one_sided_to_stealth_address(
                     transaction_service.clone(),
                     config.fee_per_gram,
                     args.amount,
+                    UtxoSelectionCriteria::default(),
                     args.destination.into(),
                     args.message,
                 )
-                .await?;
-                debug!(target: LOG_TARGET, "send-one-sided-to-stealth-address tx_id {}", tx_id);
-                tx_ids.push(tx_id);
+                .await
+                {
+                    Ok(tx_id) => {
+                        debug!(
+                            target: LOG_TARGET,
+                            "send-one-sided-to-stealth-address concluded with tx_id {}", tx_id
+                        );
+                        tx_ids.push(tx_id);
+                    },
+                    Err(e) => eprintln!("SendOneSidedToStealthAddress error! {}", e),
+                }
             },
             MakeItRain(args) => {
-                make_it_rain(
+                let transaction_type = args.transaction_type();
+                if let Err(e) = make_it_rain(
                     transaction_service.clone(),
                     config.fee_per_gram,
                     args.transactions_per_second,
@@ -646,13 +704,16 @@ pub async fn command_runner(
                     args.increase_amount,
                     args.start_time.unwrap_or_else(Utc::now),
                     args.destination.into(),
-                    !args.one_sided,
+                    transaction_type,
                     args.message,
                 )
-                .await?;
+                .await
+                {
+                    eprintln!("MakeItRain error! {}", e);
+                }
             },
             CoinSplit(args) => {
-                let tx_id = coin_split(
+                match coin_split(
                     args.amount_per_split,
                     args.num_splits,
                     args.fee_per_gram,
@@ -660,144 +721,231 @@ pub async fn command_runner(
                     &mut output_service,
                     &mut transaction_service.clone(),
                 )
-                .await?;
-                tx_ids.push(tx_id);
-                println!("Coin split succeeded");
+                .await
+                {
+                    Ok(tx_id) => {
+                        tx_ids.push(tx_id);
+                        debug!(target: LOG_TARGET, "coin-split concluded with tx_id {}", tx_id);
+                        println!("Coin split succeeded");
+                    },
+                    Err(e) => eprintln!("CoinSplit error! {}", e),
+                }
             },
             Whois(args) => {
                 let public_key = args.public_key.into();
-                let emoji_id = EmojiId::from_pubkey(&public_key);
+                let emoji_id = EmojiId::from_public_key(&public_key).to_emoji_string();
 
                 println!("Public Key: {}", public_key.to_hex());
                 println!("Emoji ID  : {}", emoji_id);
             },
-            ExportUtxos(args) => {
-                let utxos = output_service.get_unspent_outputs().await?;
-                let count = utxos.len();
-                let sum: MicroTari = utxos.iter().map(|utxo| utxo.value).sum();
-                if let Some(file) = args.output_file {
-                    write_utxos_to_csv_file(utxos, file)?;
-                } else {
-                    for (i, utxo) in utxos.iter().enumerate() {
-                        println!("{}. Value: {} {}", i + 1, utxo.value, utxo.features);
+            ExportUtxos(args) => match output_service.get_unspent_outputs().await {
+                Ok(utxos) => {
+                    let count = utxos.len();
+                    let sum: MicroTari = utxos.iter().map(|utxo| utxo.value).sum();
+                    if let Some(file) = args.output_file {
+                        if let Err(e) = write_utxos_to_csv_file(utxos, file) {
+                            eprintln!("ExportUtxos error! {}", e);
+                        }
+                    } else {
+                        for (i, utxo) in utxos.iter().enumerate() {
+                            println!("{}. Value: {} {}", i + 1, utxo.value, utxo.features);
+                        }
                     }
-                }
-                println!("Total number of UTXOs: {}", count);
-                println!("Total value of UTXOs: {}", sum);
+                    println!("Total number of UTXOs: {}", count);
+                    println!("Total value of UTXOs: {}", sum);
+                },
+                Err(e) => eprintln!("ExportUtxos error! {}", e),
             },
-            ExportSpentUtxos(args) => {
-                let utxos = output_service.get_spent_outputs().await?;
-                let count = utxos.len();
-                let sum: MicroTari = utxos.iter().map(|utxo| utxo.value).sum();
-                if let Some(file) = args.output_file {
-                    write_utxos_to_csv_file(utxos, file)?;
-                } else {
-                    for (i, utxo) in utxos.iter().enumerate() {
-                        println!("{}. Value: {} {}", i + 1, utxo.value, utxo.features);
+            ExportSpentUtxos(args) => match output_service.get_spent_outputs().await {
+                Ok(utxos) => {
+                    let count = utxos.len();
+                    let sum: MicroTari = utxos.iter().map(|utxo| utxo.value).sum();
+                    if let Some(file) = args.output_file {
+                        if let Err(e) = write_utxos_to_csv_file(utxos, file) {
+                            eprintln!("ExportSpentUtxos error! {}", e);
+                        }
+                    } else {
+                        for (i, utxo) in utxos.iter().enumerate() {
+                            println!("{}. Value: {} {}", i + 1, utxo.value, utxo.features);
+                        }
                     }
-                }
-                println!("Total number of UTXOs: {}", count);
-                println!("Total value of UTXOs: {}", sum);
+                    println!("Total number of UTXOs: {}", count);
+                    println!("Total value of UTXOs: {}", sum);
+                },
+                Err(e) => eprintln!("ExportSpentUtxos error! {}", e),
             },
-            CountUtxos => {
-                let utxos = output_service.get_unspent_outputs().await?;
-                let count = utxos.len();
-                let values: Vec<MicroTari> = utxos.iter().map(|utxo| utxo.value).collect();
-                let sum: MicroTari = values.iter().sum();
-                println!("Total number of UTXOs: {}", count);
-                println!("Total value of UTXOs : {}", sum);
-                if let Some(min) = values.iter().min() {
-                    println!("Minimum value UTXO   : {}", min);
-                }
-                if count > 0 {
-                    let average = f64::from(sum) / count as f64;
-                    let average = Tari::from(MicroTari(average.round() as u64));
-                    println!("Average value UTXO   : {}", average);
-                }
-                if let Some(max) = values.iter().max() {
-                    println!("Maximum value UTXO   : {}", max);
-                }
+            CountUtxos => match output_service.get_unspent_outputs().await {
+                Ok(utxos) => {
+                    let count = utxos.len();
+                    let values: Vec<MicroTari> = utxos.iter().map(|utxo| utxo.value).collect();
+                    let sum: MicroTari = values.iter().sum();
+                    println!("Total number of UTXOs: {}", count);
+                    println!("Total value of UTXOs : {}", sum);
+                    if let Some(min) = values.iter().min() {
+                        println!("Minimum value UTXO   : {}", min);
+                    }
+                    if count > 0 {
+                        let average = f64::from(sum) / count as f64;
+                        let average = Tari::from(MicroTari(average.round() as u64));
+                        println!("Average value UTXO   : {}", average);
+                    }
+                    if let Some(max) = values.iter().max() {
+                        println!("Maximum value UTXO   : {}", max);
+                    }
+                },
+                Err(e) => eprintln!("CountUtxos error! {}", e),
             },
             SetBaseNode(args) => {
-                set_base_node_peer(wallet.clone(), args.public_key.into(), args.address).await?;
+                if let Err(e) = set_base_node_peer(wallet.clone(), args.public_key.into(), args.address).await {
+                    eprintln!("SetBaseNode error! {}", e);
+                }
             },
             SetCustomBaseNode(args) => {
-                let (public_key, net_address) =
-                    set_base_node_peer(wallet.clone(), args.public_key.into(), args.address).await?;
-                wallet
-                    .db
-                    .set_client_key_value(CUSTOM_BASE_NODE_PUBLIC_KEY_KEY.to_string(), public_key.to_string())
-                    .await?;
-                wallet
-                    .db
-                    .set_client_key_value(CUSTOM_BASE_NODE_ADDRESS_KEY.to_string(), net_address.to_string())
-                    .await?;
-                println!("Custom base node peer saved in wallet database.");
+                match set_base_node_peer(wallet.clone(), args.public_key.into(), args.address).await {
+                    Ok((public_key, net_address)) => {
+                        if let Err(e) = wallet
+                            .db
+                            .set_client_key_value(CUSTOM_BASE_NODE_PUBLIC_KEY_KEY.to_string(), public_key.to_string())
+                        {
+                            eprintln!("SetCustomBaseNode error! {}", e);
+                        } else if let Err(e) = wallet
+                            .db
+                            .set_client_key_value(CUSTOM_BASE_NODE_ADDRESS_KEY.to_string(), net_address.to_string())
+                        {
+                            eprintln!("SetCustomBaseNode error! {}", e);
+                        } else {
+                            println!("Custom base node peer saved in wallet database.");
+                        }
+                    },
+                    Err(e) => eprintln!("SetCustomBaseNode error! {}", e),
+                }
             },
             ClearCustomBaseNode => {
-                wallet
+                match wallet
                     .db
                     .clear_client_value(CUSTOM_BASE_NODE_PUBLIC_KEY_KEY.to_string())
-                    .await?;
-                wallet
-                    .db
-                    .clear_client_value(CUSTOM_BASE_NODE_ADDRESS_KEY.to_string())
-                    .await?;
-                println!("Custom base node peer cleared from wallet database.");
+                {
+                    Ok(_) => match wallet.db.clear_client_value(CUSTOM_BASE_NODE_ADDRESS_KEY.to_string()) {
+                        Ok(true) => {
+                            println!("Custom base node peer cleared from wallet database.")
+                        },
+                        Ok(false) => {
+                            println!("Warning - custom base node peer not cleared from wallet database.")
+                        },
+                        Err(e) => eprintln!("ClearCustomBaseNode error! {}", e),
+                    },
+                    Err(e) => eprintln!("ClearCustomBaseNode error! {}", e),
+                }
             },
             InitShaAtomicSwap(args) => {
-                let (tx_id, pre_image, output) = init_sha_atomic_swap(
+                match init_sha_atomic_swap(
                     transaction_service.clone(),
                     config.fee_per_gram,
                     args.amount,
+                    UtxoSelectionCriteria::default(),
                     args.destination.into(),
                     args.message,
                 )
-                .await?;
-                debug!(target: LOG_TARGET, "tari HTLC tx_id {}", tx_id);
-                let hash: [u8; 32] = Sha256::digest(pre_image.as_bytes()).into();
-                println!("pre_image hex: {}", pre_image.to_hex());
-                println!("pre_image hash: {}", hash.to_hex());
-                println!("Output hash: {}", output.hash().to_hex());
-                tx_ids.push(tx_id);
+                .await
+                {
+                    Ok((tx_id, pre_image, output)) => {
+                        debug!(target: LOG_TARGET, "tari HTLC tx_id {}", tx_id);
+                        let hash: [u8; 32] = Sha256::digest(pre_image.as_bytes()).into();
+                        println!("pre_image hex: {}", pre_image.to_hex());
+                        println!("pre_image hash: {}", hash.to_hex());
+                        println!("Output hash: {}", output.hash().to_hex());
+                        tx_ids.push(tx_id);
+                    },
+                    Err(e) => eprintln!("InitShaAtomicSwap error! {}", e),
+                }
             },
-            FinaliseShaAtomicSwap(args) => {
-                let tx_id = finalise_sha_atomic_swap(
-                    output_service.clone(),
-                    transaction_service.clone(),
-                    args.output_hash[0].clone(),
-                    args.pre_image.into(),
-                    config.fee_per_gram.into(),
-                    args.message,
-                )
-                .await?;
-                debug!(target: LOG_TARGET, "claiming tari HTLC tx_id {}", tx_id);
-                tx_ids.push(tx_id);
+            FinaliseShaAtomicSwap(args) => match args.output_hash[0].clone().try_into() {
+                Ok(hash) => {
+                    match finalise_sha_atomic_swap(
+                        output_service.clone(),
+                        transaction_service.clone(),
+                        hash,
+                        args.pre_image.into(),
+                        config.fee_per_gram.into(),
+                        args.message,
+                    )
+                    .await
+                    {
+                        Ok(tx_id) => {
+                            debug!(target: LOG_TARGET, "claiming tari HTLC tx_id {}", tx_id);
+                            tx_ids.push(tx_id);
+                        },
+                        Err(e) => eprintln!("FinaliseShaAtomicSwap error! {}", e),
+                    }
+                },
+                Err(e) => eprintln!("FinaliseShaAtomicSwap error! {}", e),
             },
-            ClaimShaAtomicSwapRefund(args) => {
-                let tx_id = claim_htlc_refund(
-                    output_service.clone(),
-                    transaction_service.clone(),
-                    args.output_hash[0].clone(),
-                    config.fee_per_gram.into(),
-                    args.message,
-                )
-                .await?;
-                debug!(target: LOG_TARGET, "claiming tari HTLC tx_id {}", tx_id);
-                tx_ids.push(tx_id);
+            ClaimShaAtomicSwapRefund(args) => match args.output_hash[0].clone().try_into() {
+                Ok(hash) => {
+                    match claim_htlc_refund(
+                        output_service.clone(),
+                        transaction_service.clone(),
+                        hash,
+                        config.fee_per_gram.into(),
+                        args.message,
+                    )
+                    .await
+                    {
+                        Ok(tx_id) => {
+                            debug!(target: LOG_TARGET, "claiming tari HTLC tx_id {}", tx_id);
+                            tx_ids.push(tx_id);
+                        },
+                        Err(e) => eprintln!("ClaimShaAtomicSwapRefund error! {}", e),
+                    }
+                },
+                Err(e) => eprintln!("FinaliseShaAtomicSwap error! {}", e),
             },
+
             RevalidateWalletDb => {
-                output_service
+                if let Err(e) = output_service
                     .revalidate_all_outputs()
                     .await
-                    .map_err(CommandError::OutputManagerError)?;
-                transaction_service
+                    .map_err(CommandError::OutputManagerError)
+                {
+                    eprintln!("RevalidateWalletDb error! {}", e);
+                }
+                if let Err(e) = transaction_service
                     .revalidate_all_transactions()
                     .await
-                    .map_err(CommandError::TransactionServiceError)?;
+                    .map_err(CommandError::TransactionServiceError)
+                {
+                    eprintln!("RevalidateWalletDb error! {}", e);
+                }
             },
-            Contract(command) => {
-                handle_contract_command(&wallet, command).await?;
+            HashGrpcPassword(args) => {
+                match config
+                    .grpc_authentication
+                    .username_password()
+                    .ok_or_else(|| CommandError::General("GRPC basic auth is not configured".to_string()))
+                {
+                    Ok((username, password)) => {
+                        match create_salted_hashed_password(password.reveal())
+                            .map_err(|e| CommandError::General(e.to_string()))
+                        {
+                            Ok(hashed_password) => {
+                                if args.short {
+                                    println!("{}", *hashed_password);
+                                } else {
+                                    println!("Your hashed password is:");
+                                    println!("{}", *hashed_password);
+                                    println!();
+                                    println!(
+                                        "Use HTTP basic auth with username '{}' and the hashed password to make GRPC \
+                                         requests",
+                                        username
+                                    );
+                                }
+                            },
+                            Err(e) => eprintln!("HashGrpcPassword error! {}", e),
+                        }
+                    },
+                    Err(e) => eprintln!("HashGrpcPassword error! {}", e),
+                }
             },
         }
     }
@@ -840,427 +988,6 @@ pub async fn command_runner(
     Ok(())
 }
 
-async fn handle_contract_command(wallet: &WalletSqlite, command: ContractCommand) -> Result<(), CommandError> {
-    match command.subcommand {
-        ContractSubcommand::InitDefinition(args) => init_contract_definition_spec(wallet, args).await,
-        ContractSubcommand::InitConstitution(args) => init_contract_constitution_spec(wallet, args).await,
-        ContractSubcommand::InitUpdateProposal(args) => init_contract_update_proposal_spec(wallet, args).await,
-        ContractSubcommand::InitAmendment(args) => init_contract_amendment_spec(args),
-        ContractSubcommand::PublishDefinition(args) => publish_contract_definition(wallet, args).await,
-        ContractSubcommand::PublishConstitution(args) => publish_contract_constitution(wallet, args).await,
-        ContractSubcommand::PublishUpdateProposal(args) => publish_contract_update_proposal(wallet, args).await,
-        ContractSubcommand::PublishAmendment(args) => publish_contract_amendment(wallet, args).await,
-    }
-}
-
-async fn init_contract_definition_spec(wallet: &WalletSqlite, args: InitDefinitionArgs) -> Result<(), CommandError> {
-    if args.dest_path.exists() {
-        if args.force {
-            println!("{} exists and will be overwritten.", args.dest_path.to_string_lossy());
-        } else {
-            println!(
-                "{} exists. Use `--force` to overwrite.",
-                args.dest_path.to_string_lossy()
-            );
-            return Ok(());
-        }
-    }
-    let mut dest = args.dest_path;
-    if dest.extension().is_none() {
-        dest = dest.join("contract.json");
-    }
-
-    let contract_name = Prompt::new("Contract name (max 32 characters):")
-        .skip_if_some(args.contract_name)
-        .ask()?;
-    if contract_name.as_bytes().len() > 32 {
-        return Err(CommandError::InvalidArgument(
-            "Contract name must be at most 32 bytes.".to_string(),
-        ));
-    }
-    println!(
-        "Wallet public key: {}",
-        wallet.comms.node_identity().public_key().to_hex()
-    );
-    let use_wallet_pk = Prompt::new("Use wallet public key as issuer public key? (Y/N):")
-        .skip_if_some(args.contract_issuer.as_ref().map(|_| "y".to_string()))
-        .ask_parsed::<YesNo>()
-        .map(|yn| yn.as_bool())?;
-
-    let contract_issuer = if use_wallet_pk {
-        args.contract_issuer
-            .map(|s| PublicKey::from_hex(&s))
-            .transpose()
-            .map_err(|_| CommandError::InvalidArgument("Issuer public key hex is invalid.".to_string()))?
-            .unwrap_or_else(|| wallet.comms.node_identity().public_key().clone())
-    } else {
-        let contract_issuer = Prompt::new("Issuer public Key (hex): (Press enter to generate a new one)")
-            .with_default("")
-            .skip_if_some(args.contract_issuer)
-            .ask_parsed::<Optional<HexArg<PublicKey>>>()?
-            .into_inner()
-            .map(|v| v.into_inner());
-        match contract_issuer {
-            Some(pk) => pk,
-            None => {
-                let issuer_key_path = dest.parent().unwrap_or(dest.as_path()).join("issuer_keys.json");
-                let issuer_public_key_path = Prompt::new("Enter path to generate new issuer public key:")
-                    .with_default(issuer_key_path.to_string_lossy())
-                    .ask_parsed::<PathBuf>()?;
-                let key_result = wallet
-                    .key_manager_service
-                    .get_next_key(OutputManagerKeyManagerBranch::ContractIssuer.get_branch_key())
-                    .await?;
-
-                let public_key = key_result.to_public_key();
-                write_to_issuer_key_file(&issuer_public_key_path, key_result)?;
-                println!("Wrote to key file {}", issuer_public_key_path.to_string_lossy());
-                public_key
-            },
-        }
-    };
-
-    let runtime = Prompt::new("Contract runtime:")
-        .skip_if_some(args.runtime)
-        .with_default("/tari/wasm/v0.1")
-        .ask_parsed()?;
-
-    let contract_definition = ContractDefinitionFileFormat {
-        contract_name,
-        contract_issuer,
-        contract_spec: ContractSpecificationFileFormat {
-            runtime,
-            public_functions: vec![],
-        },
-    };
-    write_json_file(&dest, &contract_definition).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-    println!("Wrote {}", dest.to_string_lossy());
-    Ok(())
-}
-
-async fn init_contract_constitution_spec(
-    wallet: &WalletSqlite,
-    args: InitConstitutionArgs,
-) -> Result<(), CommandError> {
-    if args.dest_path.exists() {
-        if args.force {
-            println!("{} exists and will be overwritten.", args.dest_path.to_string_lossy());
-        } else {
-            println!(
-                "{} exists. Use `--force` to overwrite.",
-                args.dest_path.to_string_lossy()
-            );
-            return Ok(());
-        }
-    }
-    let dest = args.dest_path;
-
-    let contract_id = Prompt::new("Contract id (hex):")
-        .skip_if_some(args.contract_id)
-        .ask_parsed()?;
-    let committee: Vec<String> = Prompt::new("Validator committee ids (hex):").ask_repeatedly()?;
-    println!("🔗 Waiting for connection to base node...");
-    let tip_height = get_tip_height(wallet).await;
-    let prompt = if let Some(tip) = tip_height {
-        println!("🔗 Connected. Tip is at {}", tip);
-        Prompt::new("Acceptance period expiry (RELATIVE block height):")
-    } else {
-        println!("⚠️  Not online. Unable to determine current tip height");
-        Prompt::new("Acceptance period expiry (ABSOLUTE block height):")
-    };
-    let mut acceptance_period_expiry = prompt
-        .skip_if_some(args.acceptance_period_expiry)
-        .with_default("50")
-        .ask_parsed()?;
-    if let Some(tip) = tip_height {
-        acceptance_period_expiry += tip;
-    }
-    println!(
-        "ℹ️ Acceptance period expiry is set to absolute height {}",
-        acceptance_period_expiry
-    );
-    let minimum_quorum_required = Prompt::new("Minimum quorum:")
-        .skip_if_some(args.minimum_quorum_required)
-        .with_default(committee.len().to_string())
-        .ask_parsed()?;
-
-    let constitution = ConstitutionDefinitionFileFormat {
-        contract_id,
-        validator_committee: committee.iter().map(|c| PublicKey::from_hex(c).unwrap()).collect(),
-        consensus: SideChainConsensus::MerkleRoot,
-        acceptance_parameters: ContractAcceptanceRequirements {
-            acceptance_period_expiry,
-            minimum_quorum_required,
-        },
-        checkpoint_parameters: CheckpointParameters {
-            minimum_quorum_required: 0,
-            abandoned_interval: 0,
-            quarantine_interval: 0,
-        },
-        constitution_change_rules: ConstitutionChangeRulesFileFormat {
-            change_flags: 0,
-            requirements_for_constitution_change: None,
-        },
-    };
-
-    write_json_file(&dest, &constitution).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-    println!("Wrote {}", dest.to_string_lossy());
-    Ok(())
-}
-
-async fn init_contract_update_proposal_spec(
-    wallet: &WalletSqlite,
-    args: InitUpdateProposalArgs,
-) -> Result<(), CommandError> {
-    if args.dest_path.exists() {
-        if args.force {
-            println!("{} exists and will be overwritten.", args.dest_path.to_string_lossy());
-        } else {
-            println!(
-                "{} exists. Use `--force` to overwrite.",
-                args.dest_path.to_string_lossy()
-            );
-            return Ok(());
-        }
-    }
-    let dest = args.dest_path;
-
-    let contract_id = Prompt::new("Contract id (hex):").skip_if_some(args.contract_id).ask()?;
-    let proposal_id = Prompt::new("Proposal id (integer, unique inside the contract scope):")
-        .skip_if_some(args.proposal_id)
-        .with_default("0".to_string())
-        .ask_parsed()?;
-    let committee: Vec<String> = Prompt::new("Validator committee ids (hex):").ask_repeatedly()?;
-    println!("🔗 Waiting for connection to base node...");
-    let tip_height = get_tip_height(wallet).await;
-    let prompt = if let Some(tip) = tip_height {
-        println!("🔗 Connected. Tip is at {}", tip);
-        Prompt::new("Acceptance period expiry (RELATIVE block height):")
-    } else {
-        println!("⚠️  Not online. Unable to determine current tip height");
-        Prompt::new("Acceptance period expiry (ABSOLUTE block height):")
-    };
-    let mut acceptance_period_expiry = prompt
-        .skip_if_some(args.acceptance_period_expiry)
-        .with_default("50".to_string())
-        .ask_parsed()?;
-    if let Some(tip) = tip_height {
-        acceptance_period_expiry += tip;
-    }
-    println!("ℹ️ Acceptance period expiry is at height {}", acceptance_period_expiry);
-    let minimum_quorum_required = Prompt::new("Minimum quorum:")
-        .skip_if_some(args.minimum_quorum_required)
-        .with_default(committee.len().to_string())
-        .ask_parsed()?;
-
-    let updated_constitution = ConstitutionDefinitionFileFormat {
-        contract_id,
-        validator_committee: committee.iter().map(|c| PublicKey::from_hex(c).unwrap()).collect(),
-        consensus: SideChainConsensus::MerkleRoot,
-        acceptance_parameters: ContractAcceptanceRequirements {
-            acceptance_period_expiry,
-            minimum_quorum_required,
-        },
-        checkpoint_parameters: CheckpointParameters {
-            minimum_quorum_required: 0,
-            abandoned_interval: 0,
-            quarantine_interval: 0,
-        },
-        constitution_change_rules: ConstitutionChangeRulesFileFormat {
-            change_flags: 0,
-            requirements_for_constitution_change: None,
-        },
-    };
-
-    let update_proposal = ContractUpdateProposalFileFormat {
-        proposal_id,
-        // TODO: use a private key to sign the proposal
-        signature: SignatureFileFormat::default(),
-        updated_constitution,
-    };
-
-    write_json_file(&dest, &update_proposal)?;
-    println!("Wrote {}", dest.to_string_lossy());
-    Ok(())
-}
-
-fn init_contract_amendment_spec(args: InitAmendmentArgs) -> Result<(), CommandError> {
-    if args.dest_path.exists() {
-        if args.force {
-            println!("{} exists and will be overwritten.", args.dest_path.to_string_lossy());
-        } else {
-            println!(
-                "{} exists. Use `--force` to overwrite.",
-                args.dest_path.to_string_lossy()
-            );
-            return Ok(());
-        }
-    }
-    let dest = args.dest_path;
-
-    // check that the proposal file exists
-    if !args.proposal_file_path.exists() {
-        println!(
-            "Proposal file path {} not found",
-            args.proposal_file_path.to_string_lossy()
-        );
-        return Ok(());
-    }
-    // parse the JSON file with the proposal
-    let update_proposal: ContractUpdateProposalFileFormat = read_json_file(&args.proposal_file_path)?;
-
-    // read the activation_window value from the user
-    let activation_window = Prompt::new("Activation window (in blocks, integer):")
-        .skip_if_some(args.activation_window)
-        .with_default("50".to_string())
-        .ask_parsed()?;
-
-    // create the amendment from the proposal
-    let amendment = ContractAmendmentFileFormat {
-        proposal_id: update_proposal.proposal_id,
-        validator_committee: update_proposal.updated_constitution.validator_committee.clone(),
-        // TODO: import the real signatures for all the proposal acceptances
-        validator_signatures: Vec::new(),
-        updated_constitution: update_proposal.updated_constitution,
-        activation_window,
-    };
-
-    // write the amendment to the destination file
-    write_json_file(&dest, &amendment)?;
-    println!("Wrote {}", dest.to_string_lossy());
-
-    Ok(())
-}
-
-async fn publish_contract_definition(wallet: &WalletSqlite, args: PublishFileArgs) -> Result<(), CommandError> {
-    // open and parse the JSON file with the contract definition values
-    let contract_definition: ContractDefinitionFileFormat =
-        read_json_file(&args.file_path).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-    let contract_definition_features = ContractDefinition::from(contract_definition);
-
-    // create the contract definition transaction
-    let mut asset_manager = wallet.asset_manager.clone();
-    let (tx_id, transaction) = asset_manager
-        .create_contract_definition(&contract_definition_features)
-        .await?;
-
-    // publish the contract definition transaction
-    let contract_id = transaction
-        .body
-        .outputs()
-        .iter()
-        .filter_map(|o| o.features.sidechain_features.as_ref())
-        .find_map(|f| {
-            if f.definition.is_some() {
-                Some(f.contract_id)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            CommandError::General("Asset manager did not include contract definition in output set".to_string())
-        })?;
-    let message = format!("Contract definition for contract {}", contract_id);
-    let mut transaction_service = wallet.transaction_service.clone();
-    transaction_service
-        .submit_transaction(tx_id, transaction, 0.into(), message)
-        .await?;
-
-    println!(
-        "Contract definition submitted: contract_id is {} (TxID: {})",
-        contract_id, tx_id,
-    );
-    println!("Done!");
-    Ok(())
-}
-
-async fn publish_contract_constitution(wallet: &WalletSqlite, args: PublishFileArgs) -> Result<(), CommandError> {
-    // parse the JSON file
-    let constitution_definition: ConstitutionDefinitionFileFormat =
-        read_json_file(&args.file_path).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-    let side_chain_features = SideChainFeatures::try_from(constitution_definition.clone()).unwrap();
-
-    let mut asset_manager = wallet.asset_manager.clone();
-    let (tx_id, transaction) = asset_manager
-        .create_constitution_definition(&side_chain_features)
-        .await?;
-
-    let message = format!(
-        "Contract constitution with {} members for {}",
-        constitution_definition.validator_committee.len(),
-        constitution_definition.contract_id
-    );
-    let mut transaction_service = wallet.transaction_service.clone();
-    transaction_service
-        .submit_transaction(tx_id, transaction, 0.into(), message)
-        .await?;
-
-    Ok(())
-}
-
-async fn publish_contract_update_proposal(wallet: &WalletSqlite, args: PublishFileArgs) -> Result<(), CommandError> {
-    // parse the JSON file
-    let update_proposal: ContractUpdateProposalFileFormat =
-        read_json_file(&args.file_path).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-
-    let contract_id_hex = update_proposal.updated_constitution.contract_id.clone();
-    let contract_id = FixedHash::from_hex(&contract_id_hex).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-    let update_proposal_features = ContractUpdateProposal::try_from(update_proposal).map_err(CommandError::JsonFile)?;
-
-    let mut asset_manager = wallet.asset_manager.clone();
-    let (tx_id, transaction) = asset_manager
-        .create_update_proposal(&contract_id, &update_proposal_features)
-        .await?;
-
-    let message = format!(
-        "Contract update proposal {} for contract {}",
-        update_proposal_features.proposal_id, contract_id_hex
-    );
-
-    let mut transaction_service = wallet.transaction_service.clone();
-    transaction_service
-        .submit_transaction(tx_id, transaction, 0.into(), message)
-        .await?;
-
-    println!(
-        "Contract update proposal transaction submitted with tx_id={} for contract with contract_id={}",
-        tx_id, contract_id_hex
-    );
-
-    Ok(())
-}
-
-async fn publish_contract_amendment(wallet: &WalletSqlite, args: PublishFileArgs) -> Result<(), CommandError> {
-    // parse the JSON file
-    let amendment: ContractAmendmentFileFormat =
-        read_json_file(&args.file_path).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-    let contract_id_hex = amendment.updated_constitution.contract_id.clone();
-    let contract_id = FixedHash::from_hex(&contract_id_hex).map_err(|e| CommandError::JsonFile(e.to_string()))?;
-    let amendment_features = ContractAmendment::try_from(amendment).map_err(CommandError::JsonFile)?;
-
-    let mut asset_manager = wallet.asset_manager.clone();
-    let (tx_id, transaction) = asset_manager
-        .create_contract_amendment(&contract_id, &amendment_features)
-        .await?;
-
-    let message = format!(
-        "Contract amendment {} for contract {}",
-        amendment_features.proposal_id, contract_id_hex
-    );
-
-    let mut transaction_service = wallet.transaction_service.clone();
-    transaction_service
-        .submit_transaction(tx_id, transaction, 0.into(), message)
-        .await?;
-
-    println!(
-        "Contract amendment transaction submitted with tx_id={} for contract with contract_id={}",
-        tx_id, contract_id_hex
-    );
-
-    Ok(())
-}
-
 fn write_utxos_to_csv_file(utxos: Vec<UnblindedOutput>, file_path: PathBuf) -> Result<(), CommandError> {
     let factory = CommitmentFactory::default();
     let file = File::create(file_path).map_err(|e| CommandError::CSVFile(e.to_string()))?;
@@ -1295,7 +1022,7 @@ fn write_utxos_to_csv_file(utxos: Vec<UnblindedOutput>, file_path: PathBuf) -> R
     }
     Ok(())
 }
-
+#[allow(dead_code)]
 fn write_json_file<P: AsRef<Path>, T: Serialize>(path: P, data: &T) -> Result<(), CommandError> {
     fs::create_dir_all(path.as_ref().parent().unwrap()).map_err(|e| CommandError::JsonFile(e.to_string()))?;
     let file = File::create(path).map_err(|e| CommandError::JsonFile(e.to_string()))?;
@@ -1303,11 +1030,13 @@ fn write_json_file<P: AsRef<Path>, T: Serialize>(path: P, data: &T) -> Result<()
     Ok(())
 }
 
+#[allow(dead_code)]
 fn read_json_file<P: AsRef<Path>, T: DeserializeOwned>(path: P) -> Result<T, CommandError> {
     let file = File::open(path).map_err(|e| CommandError::JsonFile(e.to_string()))?;
     serde_json::from_reader(file).map_err(|e| CommandError::JsonFile(e.to_string()))
 }
 
+#[allow(dead_code)]
 fn write_to_issuer_key_file<P: AsRef<Path>>(path: P, key_result: NextKeyResult) -> Result<(), CommandError> {
     let file_exists = path.as_ref().exists();
     let mut root = if file_exists {
@@ -1325,6 +1054,7 @@ fn write_to_issuer_key_file<P: AsRef<Path>>(path: P, key_result: NextKeyResult) 
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn get_tip_height(wallet: &WalletSqlite) -> Option<u64> {
     let client = wallet
         .wallet_connectivity

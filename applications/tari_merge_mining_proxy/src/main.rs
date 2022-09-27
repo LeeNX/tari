@@ -42,11 +42,12 @@ use futures::future;
 use hyper::{service::make_service_fn, Server};
 use log::*;
 use proxy::MergeMiningProxyService;
-use tari_app_grpc::tari_rpc as grpc;
 use tari_app_utilities::consts;
+use tari_base_node_grpc_client::BaseNodeGrpcClient;
 use tari_common::{initialize_logging, load_configuration, DefaultConfigLoader};
 use tari_comms::utils::multiaddr::multiaddr_to_socketaddr;
 use tari_core::proof_of_work::randomx_factory::RandomXFactory;
+use tari_wallet_grpc_client::WalletGrpcClient;
 use tokio::time::Duration;
 
 use crate::{
@@ -75,7 +76,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let config = MergeMiningProxyConfig::load_from(&cfg)?;
 
-    error!(target: LOG_TARGET, "Configuration: {:?}", config);
+    info!(target: LOG_TARGET, "Configuration: {:?}", config);
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(10))
@@ -86,11 +87,12 @@ async fn main() -> Result<(), anyhow::Error> {
     let base_node = multiaddr_to_socketaddr(&config.base_node_grpc_address)?;
     info!(target: LOG_TARGET, "Connecting to base node at {}", base_node);
     println!("Connecting to base node at {}", base_node);
-    let base_node_client = grpc::base_node_client::BaseNodeClient::connect(format!("http://{}", base_node)).await?;
-    let wallet = multiaddr_to_socketaddr(&config.console_wallet_grpc_address)?;
-    info!(target: LOG_TARGET, "Connecting to wallet at {}", wallet);
-    println!("Connecting to wallet at {}", wallet);
-    let wallet_client = grpc::wallet_client::WalletClient::connect(format!("http://{}", wallet)).await?;
+    let base_node_client = BaseNodeGrpcClient::connect(format!("http://{}", base_node)).await?;
+    let wallet_addr = multiaddr_to_socketaddr(&config.console_wallet_grpc_address)?;
+    info!(target: LOG_TARGET, "Connecting to wallet at {}", wallet_addr);
+    let wallet_addr = format!("http://{}", wallet_addr);
+    let wallet_client =
+        WalletGrpcClient::connect_with_auth(&wallet_addr, &config.console_wallet_grpc_authentication).await?;
     let listen_addr = multiaddr_to_socketaddr(&config.listener_address)?;
     let randomx_factory = RandomXFactory::new(config.max_randomx_vms);
     let xmrig_service = MergeMiningProxyService::new(

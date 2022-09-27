@@ -37,7 +37,7 @@ use tari_comms_dht::{
 };
 use tari_p2p::{domain_message::DomainMessage, tari_message::TariMessageType};
 use tari_service_framework::reply_channel::RequestContext;
-use tari_utilities::{hex::Hex, Hashable};
+use tari_utilities::hex::Hex;
 use tokio::{
     sync::{
         mpsc,
@@ -298,13 +298,13 @@ where B: BlockchainBackend + 'static
             let result = handle_incoming_block(inbound_nch, new_block).await;
 
             match result {
+                Ok(()) => {},
                 Err(BaseNodeServiceError::CommsInterfaceError(CommsInterfaceError::ChainStorageError(
                     ChainStorageError::AddBlockOperationLocked,
                 ))) => {
                     // Special case, dont log this again as an error
                 },
-                Err(e) => error!(target: LOG_TARGET, "Failed to handle incoming block message: {:?}", e),
-                _ => {},
+                Err(e) => error!(target: LOG_TARGET, "Failed to handle incoming block message: {}", e),
             }
         });
     }
@@ -324,10 +324,11 @@ where B: BlockchainBackend + 'static
                 );
             }
             let result = reply_tx.send(res);
-            if let Err(e) = result {
+            if let Err(res) = result {
                 error!(
                     target: LOG_TARGET,
-                    "BaseNodeService failed to send reply to local request {:?}", e
+                    "BaseNodeService failed to send reply to local request {:?}",
+                    res.map(|r| r.to_string()).map_err(|e| e.to_string())
                 );
             }
         });
@@ -339,10 +340,11 @@ where B: BlockchainBackend + 'static
             let (block, reply_tx) = block_context.split();
             let result = reply_tx.send(inbound_nch.handle_block(Arc::new(block), None).await);
 
-            if let Err(e) = result {
+            if let Err(res) = result {
                 error!(
                     target: LOG_TARGET,
-                    "BaseNodeService failed to send reply to local block submitter {:?}", e
+                    "BaseNodeService failed to send reply to local block submitter {:?}",
+                    res.map(|r| r.to_string()).map_err(|e| e.to_string())
                 );
             }
         });
@@ -389,6 +391,7 @@ async fn handle_incoming_request<B: BlockchainBackend + 'static>(
         .send_direct(
             origin_public_key,
             OutboundDomainMessage::new(&TariMessageType::BaseNodeResponse, message),
+            "Outbound response message from base node".to_string(),
         )
         .await?;
 
@@ -473,6 +476,14 @@ async fn handle_outbound_request(
     node_id: Option<NodeId>,
     service_request_timeout: Duration,
 ) -> Result<(), CommsInterfaceError> {
+    let debug_info = format!(
+        "Node request:{} to {}",
+        &request,
+        node_id
+            .as_ref()
+            .map(|n| n.short_str())
+            .unwrap_or_else(|| "random".to_string())
+    );
     let request_key = generate_request_key(&mut OsRng);
     let service_request = proto::BaseNodeServiceRequest {
         request_key,
@@ -480,6 +491,7 @@ async fn handle_outbound_request(
     };
 
     let mut send_msg_params = SendMessageParams::new();
+    send_msg_params.with_debug_info(debug_info);
     match node_id {
         Some(node_id) => send_msg_params.direct_node_id(node_id),
         None => send_msg_params.random(1),
@@ -565,6 +577,7 @@ async fn handle_outbound_block(
                 &TariMessageType::NewBlock,
                 shared_protos::core::NewBlock::from(new_block),
             ),
+            "Outbound new block from base node".to_string(),
         )
         .await;
     if let Err(e) = result {

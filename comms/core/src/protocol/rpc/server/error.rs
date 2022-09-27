@@ -22,10 +22,15 @@
 
 use std::io;
 
+use bytes::BytesMut;
 use prost::DecodeError;
 use tokio::sync::oneshot;
 
-use crate::{proto, protocol::rpc::handshake::RpcHandshakeError};
+use crate::{
+    peer_manager::NodeId,
+    proto,
+    protocol::rpc::{handshake::RpcHandshakeError, server::early_close::EarlyCloseError},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcServerError {
@@ -35,6 +40,8 @@ pub enum RpcServerError {
     Io(#[from] io::Error),
     #[error("Maximum number of RPC sessions reached")]
     MaximumSessionsReached,
+    #[error("Maximum number of client RPC sessions reached for node {node_id}")]
+    MaxSessionsPerClientReached { node_id: NodeId },
     #[error("Internal service request canceled")]
     RequestCanceled,
     #[error("Stream was closed by remote")]
@@ -53,6 +60,8 @@ pub enum RpcServerError {
     ServiceCallExceededDeadline,
     #[error("Stream read exceeded deadline")]
     ReadStreamExceededDeadline,
+    #[error("Early close error: {0}")]
+    EarlyCloseError(#[from] EarlyCloseError<BytesMut>),
 }
 
 impl From<oneshot::error::RecvError> for RpcServerError {

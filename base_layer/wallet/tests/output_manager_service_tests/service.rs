@@ -24,7 +24,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use rand::{rngs::OsRng, RngCore};
 use tari_common_types::{
     transaction::TxId,
-    types::{ComSignature, FixedHash, PrivateKey, PublicKey},
+    types::{ComSignature, PrivateKey, PublicKey},
 };
 use tari_comms::{
     peer_manager::{NodeIdentity, PeerFeatures},
@@ -41,15 +41,7 @@ use tari_core::{
         fee::Fee,
         tari_amount::{uT, MicroTari},
         test_helpers::{create_unblinded_output, TestParams as TestParamsHelpers},
-        transaction_components::{
-            CommitteeSignatures,
-            ContractCheckpoint,
-            EncryptedValue,
-            OutputFeatures,
-            OutputType,
-            TransactionOutput,
-            UnblindedOutput,
-        },
+        transaction_components::{EncryptedValue, OutputFeatures, OutputType, TransactionOutput, UnblindedOutput},
         transaction_protocol::{sender::TransactionSenderMessage, RewindData, TransactionMetadata},
         weight::TransactionWeight,
         CryptoFactories,
@@ -58,14 +50,12 @@ use tari_core::{
 };
 use tari_crypto::{
     commitment::HomomorphicCommitmentFactory,
-    hash::blake2::Blake256,
     keys::{PublicKey as PublicKeyTrait, SecretKey},
 };
 use tari_key_manager::{cipher_seed::CipherSeed, mnemonic::Mnemonic};
 use tari_script::{inputs, script, TariScript};
 use tari_service_framework::reply_channel;
 use tari_shutdown::Shutdown;
-use tari_utilities::Hashable;
 use tari_wallet::{
     base_node_service::{
         handle::{BaseNodeEvent, BaseNodeServiceHandle},
@@ -156,17 +146,20 @@ async fn setup_output_manager_service<T: OutputManagerBackend + 'static, U: KeyM
     mock_base_node_service.set_default_base_node_state();
     task::spawn(mock_base_node_service.run());
 
-    let wallet_connectivity_mock = create_wallet_connectivity_mock();
+    let mut wallet_connectivity_mock = create_wallet_connectivity_mock();
     // let (connectivity, connectivity_mock) = create_connectivity_mock();
     // let connectivity_mock_state = connectivity_mock.get_shared_state();
     // task::spawn(connectivity_mock.run());
+    let server_node_identity = build_node_identity(PeerFeatures::COMMUNICATION_NODE);
+
+    wallet_connectivity_mock.notify_base_node_set(server_node_identity.to_peer());
+    wallet_connectivity_mock.base_node_changed().await;
 
     let service = BaseNodeWalletRpcMockService::new();
     let rpc_service_state = service.get_state();
 
     let server = BaseNodeWalletRpcServer::new(service);
     let protocol_name = server.as_protocol_name();
-    let server_node_identity = build_node_identity(PeerFeatures::COMMUNICATION_NODE);
 
     let mut mock_server = MockRpcServer::new(server, server_node_identity.clone());
     mock_server.serve();
@@ -339,7 +332,7 @@ async fn generate_sender_transaction_message(amount: MicroTari) -> (TxId, Transa
             script_private_key,
         );
 
-    let mut stp = builder.build::<Blake256>(&factories, None, u64::MAX).unwrap();
+    let mut stp = builder.build(&factories, None, u64::MAX).unwrap();
     let tx_id = stp.get_tx_id().unwrap();
     (
         tx_id,
@@ -363,7 +356,13 @@ async fn fee_estimate() {
     let fee_per_gram = MicroTari::from(1);
     let fee = oms
         .output_manager_handle
-        .fee_estimate(MicroTari::from(100), fee_per_gram, 1, 1)
+        .fee_estimate(
+            MicroTari::from(100),
+            UtxoSelectionCriteria::default(),
+            fee_per_gram,
+            1,
+            1,
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -375,7 +374,13 @@ async fn fee_estimate() {
     for outputs in 1..5 {
         let fee = oms
             .output_manager_handle
-            .fee_estimate(MicroTari::from(100), fee_per_gram, 1, outputs)
+            .fee_estimate(
+                MicroTari::from(100),
+                UtxoSelectionCriteria::default(),
+                fee_per_gram,
+                1,
+                outputs,
+            )
             .await
             .unwrap();
 
@@ -392,15 +397,20 @@ async fn fee_estimate() {
     }
 
     // not enough funds
-    let err = oms
+    let fee = oms
         .output_manager_handle
-        .fee_estimate(MicroTari::from(2750), fee_per_gram, 1, 1)
+        .fee_estimate(
+            MicroTari::from(2750),
+            UtxoSelectionCriteria::default(),
+            fee_per_gram,
+            1,
+            1,
+        )
         .await
-        .unwrap_err();
-    assert!(matches!(err, OutputManagerError::NotEnoughFunds));
+        .unwrap();
+    assert_eq!(fee, MicroTari::from(360));
 }
 
-#[ignore]
 #[allow(clippy::identity_op)]
 #[tokio::test]
 async fn test_utxo_selection_no_chain_metadata() {
@@ -479,30 +489,32 @@ async fn test_utxo_selection_no_chain_metadata() {
     }
 
     // test that we can get a fee estimate with no chain metadata
-    let fee = oms.fee_estimate(amount, fee_per_gram, 1, 2).await.unwrap();
+    let fee = oms
+        .fee_estimate(amount, UtxoSelectionCriteria::default(), fee_per_gram, 1, 2)
+        .await
+        .unwrap();
     let expected_fee = fee_calc.calculate(fee_per_gram, 1, 1, 3, default_metadata_byte_size() * 3);
     assert_eq!(fee, expected_fee);
 
-    // test if a fee estimate would be possible with pending funds included
-    // at this point 52000 uT is still spendable, with pending change incoming of 1690 uT
-    // so instead of returning "not enough funds".to_string(), return "funds pending"
     let spendable_amount = (3..=10).sum::<u64>() * amount;
-    let err = oms
-        .fee_estimate(spendable_amount, fee_per_gram, 1, 2)
+    let fee = oms
+        .fee_estimate(spendable_amount, UtxoSelectionCriteria::default(), fee_per_gram, 1, 2)
         .await
-        .unwrap_err();
-    assert!(matches!(err, OutputManagerError::FundsPending));
+        .unwrap();
+    assert_eq!(fee, MicroTari::from(250));
 
-    // test not enough funds
     let broke_amount = spendable_amount + MicroTari::from(2000);
-    let err = oms.fee_estimate(broke_amount, fee_per_gram, 1, 2).await.unwrap_err();
-    assert!(matches!(err, OutputManagerError::NotEnoughFunds));
+    let fee = oms
+        .fee_estimate(broke_amount, UtxoSelectionCriteria::default(), fee_per_gram, 1, 2)
+        .await
+        .unwrap();
+    assert_eq!(fee, MicroTari::from(250));
 
     // coin split uses the "Largest" selection strategy
     let (_, tx, utxos_total_value) = oms.create_coin_split(vec![], amount, 5, fee_per_gram).await.unwrap();
     let expected_fee = fee_calc.calculate(fee_per_gram, 1, 1, 6, default_metadata_byte_size() * 6);
     assert_eq!(tx.body.get_total_fee(), expected_fee);
-    assert_eq!(utxos_total_value, MicroTari::from(10_000));
+    assert_eq!(utxos_total_value, MicroTari::from(5_000));
 
     // test that largest utxo was encumbered
     let utxos = oms.get_unspent_outputs().await.unwrap();
@@ -517,7 +529,6 @@ async fn test_utxo_selection_no_chain_metadata() {
 #[tokio::test]
 #[allow(clippy::identity_op)]
 #[allow(clippy::too_many_lines)]
-#[ignore]
 async fn test_utxo_selection_with_chain_metadata() {
     let factories = CryptoFactories::default();
     let (connection, _tempdir) = get_temp_sqlite_database_connection();
@@ -571,22 +582,23 @@ async fn test_utxo_selection_with_chain_metadata() {
     assert_eq!(utxos.len(), 10);
 
     // test fee estimates
-    let fee = oms.fee_estimate(amount, fee_per_gram, 1, 2).await.unwrap();
+    let fee = oms
+        .fee_estimate(amount, UtxoSelectionCriteria::default(), fee_per_gram, 1, 2)
+        .await
+        .unwrap();
     let expected_fee = fee_calc.calculate(fee_per_gram, 1, 2, 3, default_metadata_byte_size() * 3);
     assert_eq!(fee, expected_fee);
 
-    // test fee estimates are maturity aware
-    // even though we have utxos for the fee, they can't be spent because they are not mature yet
     let spendable_amount = (1..=6).sum::<u64>() * amount;
-    let err = oms
-        .fee_estimate(spendable_amount, fee_per_gram, 1, 2)
+    let fee = oms
+        .fee_estimate(spendable_amount, UtxoSelectionCriteria::default(), fee_per_gram, 1, 2)
         .await
-        .unwrap_err();
-    assert!(matches!(err, OutputManagerError::NotEnoughFunds));
+        .unwrap();
+    assert_eq!(fee, MicroTari::from(250));
 
     // test coin split is maturity aware
     let (_, tx, utxos_total_value) = oms.create_coin_split(vec![], amount, 5, fee_per_gram).await.unwrap();
-    assert_eq!(utxos_total_value, MicroTari::from(6_000));
+    assert_eq!(utxos_total_value, MicroTari::from(5_000));
     let expected_fee = fee_calc.calculate(fee_per_gram, 1, 1, 6, default_metadata_byte_size() * 6);
     assert_eq!(tx.body.get_total_fee(), expected_fee);
 
@@ -719,83 +731,6 @@ async fn test_utxo_selection_with_tx_priority() {
     assert_eq!(utxos.len(), 1);
 
     assert_ne!(utxos[0].features.output_type, OutputType::Coinbase);
-}
-
-#[tokio::test]
-async fn utxo_selection_for_contract_checkpoint() {
-    let factories = CryptoFactories::default();
-    let (connection, _tempdir) = get_temp_sqlite_database_connection();
-    let contract_id = FixedHash::hash_bytes(b"test_utxo_selection_for_contract_checkpoint");
-
-    let server_node_identity = build_node_identity(PeerFeatures::COMMUNICATION_NODE);
-    // setup with chain metadata at a height of 6
-    let (mut oms, _shutdown, _, _, _) = setup_oms_with_bn_state(
-        OutputManagerSqliteDatabase::new(connection, None),
-        Some(6),
-        server_node_identity,
-    )
-    .await;
-
-    let amount = MicroTari::from(2000);
-    let fee_per_gram = MicroTari::from(2);
-
-    // we create two outputs, one as coinbase-high priority one as normal so we can track them
-    let (_, uo) = make_input_with_features(
-        &mut OsRng.clone(),
-        amount,
-        &factories.commitment,
-        Some(OutputFeatures::for_contract_checkpoint(
-            contract_id,
-            ContractCheckpoint {
-                checkpoint_number: 0,
-                merkle_root: FixedHash::zero(),
-                signatures: CommitteeSignatures::empty(),
-            },
-        )),
-    )
-    .await;
-    oms.add_rewindable_output(uo, None, None).await.unwrap();
-    let (_, uo) = make_input_with_features(
-        &mut OsRng.clone(),
-        amount,
-        &factories.commitment,
-        Some(OutputFeatures {
-            maturity: 1,
-            ..Default::default()
-        }),
-    )
-    .await;
-    oms.add_rewindable_output(uo, None, None).await.unwrap();
-
-    let utxos = oms.get_unspent_outputs().await.unwrap();
-    assert_eq!(utxos.len(), 2);
-
-    // test transactions
-    let stp = oms
-        .prepare_transaction_to_send(
-            TxId::new_random(),
-            // Spend more than the selected contract output, this will cause the other UTXO to be included
-            MicroTari::from(2500),
-            UtxoSelectionCriteria::for_contract(contract_id, OutputType::ContractCheckpoint),
-            OutputFeatures::for_contract_checkpoint(contract_id, ContractCheckpoint {
-                checkpoint_number: 0,
-                merkle_root: FixedHash::zero(),
-                signatures: CommitteeSignatures::empty(),
-            }),
-            fee_per_gram,
-            TransactionMetadata::default(),
-            String::new(),
-            script!(Nop),
-            Covenant::default(),
-            MicroTari::zero(),
-        )
-        .await
-        .unwrap();
-    assert!(stp.get_tx_id().is_ok());
-
-    // test that the utxo with the lowest priority was left
-    let utxos = oms.get_unspent_outputs().await.unwrap();
-    assert_eq!(utxos.len(), 0);
 }
 
 #[tokio::test]
@@ -1200,7 +1135,6 @@ async fn sending_transaction_persisted_while_offline() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn coin_split_with_change() {
     let factories = CryptoFactories::default();
     let (connection, _tempdir) = get_temp_sqlite_database_connection();
@@ -1290,10 +1224,8 @@ async fn handle_coinbase_with_bulletproofs_rewinding() {
 
     let reward1 = MicroTari::from(1000);
     let fees1 = MicroTari::from(500);
-    let value1 = reward1 + fees1;
     let reward2 = MicroTari::from(2000);
     let fees2 = MicroTari::from(500);
-    let value2 = reward2 + fees2;
     let reward3 = MicroTari::from(3000);
     let fees3 = MicroTari::from(500);
     let value3 = reward3 + fees3;
@@ -1304,13 +1236,14 @@ async fn handle_coinbase_with_bulletproofs_rewinding() {
         .await
         .unwrap();
     assert_eq!(oms.output_manager_handle.get_unspent_outputs().await.unwrap().len(), 0);
+    // pending coinbases should not show up as pending incoming
     assert_eq!(
         oms.output_manager_handle
             .get_balance()
             .await
             .unwrap()
             .pending_incoming_balance,
-        value1
+        MicroTari::from(0)
     );
 
     let _tx2 = oms
@@ -1325,7 +1258,7 @@ async fn handle_coinbase_with_bulletproofs_rewinding() {
             .await
             .unwrap()
             .pending_incoming_balance,
-        value1 + value2
+        MicroTari::from(0)
     );
     let tx3 = oms
         .output_manager_handle
@@ -1339,7 +1272,7 @@ async fn handle_coinbase_with_bulletproofs_rewinding() {
             .await
             .unwrap()
             .pending_incoming_balance,
-        value1 + value2 + value3
+        MicroTari::from(0)
     );
 
     let output = tx3.body.outputs()[0].clone();
@@ -1365,7 +1298,6 @@ async fn test_txo_validation() {
 
     let mut oms = setup_output_manager_service(backend, ks_backend, true).await;
 
-    oms.wallet_connectivity_mock.notify_base_node_set(oms.node_id.to_peer());
     // Now we add the connection
     let mut connection = oms
         .mock_rpc_service
@@ -1424,22 +1356,22 @@ async fn test_txo_validation() {
             output: Some(output1_tx_output.clone().into()),
             mmr_position: 1,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output1_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output1_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output2_tx_output.clone().into()),
             mmr_position: 2,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output2_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output2_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
     ];
 
     let utxo_query_responses = UtxoQueryResponses {
-        best_block: block4_header.hash(),
+        best_block: block4_header.hash().to_vec(),
         height_of_longest_chain: 4,
         responses,
     };
@@ -1449,7 +1381,7 @@ async fn test_txo_validation() {
 
     // This response sets output1 as spent in the transaction that produced output4
     let query_deleted_response = QueryDeletedResponse {
-        best_block: block4_header.hash(),
+        best_block: block4_header.hash().to_vec(),
         height_of_longest_chain: 4,
         deleted_positions: vec![],
         not_deleted_positions: vec![1, 2],
@@ -1545,8 +1477,7 @@ async fn test_txo_validation() {
         MicroTari::from(output1_value) -
                 MicroTari::from(900_000) -
                 MicroTari::from(1260) + //Output4 = output 1 -900_000 and 1260 for fees
-                MicroTari::from(8_000_000) +
-                MicroTari::from(16_000_000)
+                MicroTari::from(8_000_000)
     );
 
     // Output 1:    Spent in Block 5 - Unconfirmed
@@ -1566,46 +1497,46 @@ async fn test_txo_validation() {
             output: Some(output1_tx_output.clone().into()),
             mmr_position: 1,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output1_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output1_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output2_tx_output.clone().into()),
             mmr_position: 2,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output2_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output2_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output4_tx_output.clone().into()),
             mmr_position: 4,
             mined_height: 5,
-            mined_in_block: block5_header.hash(),
-            output_hash: output4_tx_output.hash(),
+            mined_in_block: block5_header.hash().to_vec(),
+            output_hash: output4_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output5_tx_output.clone().into()),
             mmr_position: 5,
             mined_height: 5,
-            mined_in_block: block5_header.hash(),
-            output_hash: output5_tx_output.hash(),
+            mined_in_block: block5_header.hash().to_vec(),
+            output_hash: output5_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output6_tx_output.clone().into()),
             mmr_position: 6,
             mined_height: 5,
-            mined_in_block: block5_header.hash(),
-            output_hash: output6_tx_output.hash(),
+            mined_in_block: block5_header.hash().to_vec(),
+            output_hash: output6_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
     ];
 
     let mut utxo_query_responses = UtxoQueryResponses {
-        best_block: block5_header.hash(),
+        best_block: block5_header.hash().to_vec(),
         height_of_longest_chain: 5,
         responses,
     };
@@ -1615,12 +1546,12 @@ async fn test_txo_validation() {
 
     // This response sets output1 as spent in the transaction that produced output4
     let mut query_deleted_response = QueryDeletedResponse {
-        best_block: block5_header.hash(),
+        best_block: block5_header.hash().to_vec(),
         height_of_longest_chain: 5,
         deleted_positions: vec![1],
         not_deleted_positions: vec![2, 4, 5, 6],
         heights_deleted_at: vec![5],
-        blocks_deleted_in: vec![block5_header.hash()],
+        blocks_deleted_in: vec![block5_header.hash().to_vec()],
     };
 
     oms.base_node_wallet_rpc_mock_state
@@ -1720,6 +1651,7 @@ async fn test_txo_validation() {
             .await
             .unwrap()
             .hash()
+            .to_vec()
     );
 
     // Now we will create responses that result in a reorg of block 5, keeping block4 the same.
@@ -1743,30 +1675,30 @@ async fn test_txo_validation() {
             output: Some(output1_tx_output.clone().into()),
             mmr_position: 1,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output1_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output1_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output2_tx_output.clone().into()),
             mmr_position: 2,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output2_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output2_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output4_tx_output.clone().into()),
             mmr_position: 4,
             mined_height: 5,
-            mined_in_block: block5_header_reorg.hash(),
-            output_hash: output4_tx_output.hash(),
+            mined_in_block: block5_header_reorg.hash().to_vec(),
+            output_hash: output4_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
     ];
 
     let mut utxo_query_responses = UtxoQueryResponses {
-        best_block: block5_header_reorg.hash(),
+        best_block: block5_header_reorg.hash().to_vec(),
         height_of_longest_chain: 5,
         responses,
     };
@@ -1776,12 +1708,12 @@ async fn test_txo_validation() {
 
     // This response sets output1 as spent in the transaction that produced output4
     let mut query_deleted_response = QueryDeletedResponse {
-        best_block: block5_header_reorg.hash(),
+        best_block: block5_header_reorg.hash().to_vec(),
         height_of_longest_chain: 5,
         deleted_positions: vec![1],
         not_deleted_positions: vec![2, 4, 5, 6],
         heights_deleted_at: vec![5],
-        blocks_deleted_in: vec![block5_header_reorg.hash()],
+        blocks_deleted_in: vec![block5_header_reorg.hash().to_vec()],
     };
 
     oms.base_node_wallet_rpc_mock_state
@@ -1916,7 +1848,6 @@ async fn test_txo_revalidation() {
 
     let mut oms = setup_output_manager_service(backend, ks_backend, true).await;
 
-    oms.wallet_connectivity_mock.notify_base_node_set(oms.node_id.to_peer());
     // Now we add the connection
     let mut connection = oms
         .mock_rpc_service
@@ -1968,22 +1899,22 @@ async fn test_txo_revalidation() {
             output: Some(output1_tx_output.clone().into()),
             mmr_position: 1,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output1_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output1_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
         UtxoQueryResponse {
             output: Some(output2_tx_output.clone().into()),
             mmr_position: 2,
             mined_height: 1,
-            mined_in_block: block1_header.hash(),
-            output_hash: output2_tx_output.hash(),
+            mined_in_block: block1_header.hash().to_vec(),
+            output_hash: output2_tx_output.hash().to_vec(),
             mined_timestamp: 0,
         },
     ];
 
     let utxo_query_responses = UtxoQueryResponses {
-        best_block: block4_header.hash(),
+        best_block: block4_header.hash().to_vec(),
         height_of_longest_chain: 4,
         responses,
     };
@@ -1993,7 +1924,7 @@ async fn test_txo_revalidation() {
 
     // This response sets output1 as spent
     let query_deleted_response = QueryDeletedResponse {
-        best_block: block4_header.hash(),
+        best_block: block4_header.hash().to_vec(),
         height_of_longest_chain: 4,
         deleted_positions: vec![],
         not_deleted_positions: vec![1, 2],
@@ -2020,12 +1951,12 @@ async fn test_txo_revalidation() {
 
     // This response sets output1 as spent
     let query_deleted_response = QueryDeletedResponse {
-        best_block: block4_header.hash(),
+        best_block: block4_header.hash().to_vec(),
         height_of_longest_chain: 4,
         deleted_positions: vec![1],
         not_deleted_positions: vec![2],
         heights_deleted_at: vec![4],
-        blocks_deleted_in: vec![block4_header.hash()],
+        blocks_deleted_in: vec![block4_header.hash().to_vec()],
     };
 
     oms.base_node_wallet_rpc_mock_state
@@ -2047,12 +1978,12 @@ async fn test_txo_revalidation() {
 
     // This response sets output1 and 2 as spent
     let query_deleted_response = QueryDeletedResponse {
-        best_block: block4_header.hash(),
+        best_block: block4_header.hash().to_vec(),
         height_of_longest_chain: 4,
         deleted_positions: vec![1, 2],
         not_deleted_positions: vec![],
         heights_deleted_at: vec![4, 4],
-        blocks_deleted_in: vec![block4_header.hash(), block4_header.hash()],
+        blocks_deleted_in: vec![block4_header.hash().to_vec(), block4_header.hash().to_vec()],
     };
 
     oms.base_node_wallet_rpc_mock_state

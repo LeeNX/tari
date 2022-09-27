@@ -12,7 +12,6 @@ const WalletClient = require("./walletClient");
 const csvParser = require("csv-parser");
 const tari_crypto = require("tari_crypto");
 const { OutputType } = require("./types");
-const uuid = require("uuid");
 
 let outputProcess;
 
@@ -190,6 +189,7 @@ class WalletProcess {
       let args = [
         "build",
         "--release",
+        "--locked",
         "--bin",
         "tari_console_wallet",
         "-Z",
@@ -229,6 +229,7 @@ class WalletProcess {
       "--seed-words-file-name",
       this.seedWordsFile,
       "--non-interactive",
+      "--enable-grpc",
       "--network",
       opts.network || (this.options || {}).network || "localnet",
     ];
@@ -463,22 +464,6 @@ class WalletProcess {
       outputs[i].input_data = input_data;
     }
     return outputs;
-  }
-
-  async writeConstitutionFile(constitution) {
-    let data = JSON.stringify(constitution);
-    let absolute_path = path.resolve(this.baseDir + "/" + uuid.v4() + ".json");
-
-    fs.writeFile(absolute_path, data, "utf8", (err) => {
-      if (err) {
-        console.log(`Error writing file: ${err}`);
-      } else {
-        console.log("returning filepath:", absolute_path);
-        return absolute_path;
-      }
-    });
-
-    return absolute_path;
   }
 }
 

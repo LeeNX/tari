@@ -25,10 +25,16 @@ use std::sync::Arc;
 use monero::blockdata::block::Block as MoneroBlock;
 use rand::{rngs::OsRng, RngCore};
 use tari_common::configuration::Network;
+use tari_common_types::types::FixedHash;
 use tari_core::{
     blocks::{Block, BlockHeaderAccumulatedData, BlockHeaderValidationError, BlockValidationError, ChainBlock},
     chain_storage::{BlockchainDatabase, BlockchainDatabaseConfig, ChainStorageError, Validators},
-    consensus::{consensus_constants::PowAlgorithmConstants, ConsensusConstantsBuilder, ConsensusManager},
+    consensus::{
+        consensus_constants::PowAlgorithmConstants,
+        ConsensusConstantsBuilder,
+        ConsensusEncoding,
+        ConsensusManager,
+    },
     proof_of_work::{
         monero_rx,
         monero_rx::{FixedByteArray, MoneroPowData},
@@ -58,7 +64,7 @@ use tari_core::{
 };
 use tari_script::{inputs, script};
 use tari_test_utils::unpack_enum;
-use tari_utilities::{hex::Hex, Hashable};
+use tari_utilities::hex::Hex;
 
 use crate::helpers::{
     block_builders::{
@@ -72,35 +78,6 @@ use crate::helpers::{
 };
 
 mod helpers;
-
-#[test]
-fn test_genesis_block() {
-    let factories = CryptoFactories::default();
-    let network = Network::Esmeralda;
-    let rules = ConsensusManager::builder(network).build();
-    let backend = create_test_db();
-    let validators = Validators::new(
-        BodyOnlyValidator::new(rules.clone()),
-        HeaderValidator::new(rules.clone()),
-        OrphanBlockValidator::new(rules.clone(), false, factories),
-    );
-    let db = BlockchainDatabase::new(
-        backend,
-        rules.clone(),
-        validators,
-        BlockchainDatabaseConfig::default(),
-        DifficultyCalculator::new(rules.clone(), Default::default()),
-    )
-    .unwrap();
-    let block = rules.get_genesis_block();
-    match db.add_block(block.to_arc_block()).unwrap_err() {
-        ChainStorageError::ValidationError { source } => match source {
-            ValidationError::ValidatingGenesis => (),
-            _ => panic!("Failed because incorrect validation error was received"),
-        },
-        _ => panic!("Failed because incorrect ChainStorageError was received"),
-    }
-}
 
 #[test]
 fn test_monero_blocks() {
@@ -173,7 +150,7 @@ fn add_monero_data(tblock: &mut Block, seed_key: &str) {
 .to_string();
     let bytes = hex::decode(blocktemplate_blob).unwrap();
     let mut mblock = monero_rx::deserialize::<MoneroBlock>(&bytes[..]).unwrap();
-    let hash = tblock.header.merged_mining_hash();
+    let hash = tblock.header.mining_hash();
     monero_rx::append_merge_mining_tag(&mut mblock, hash).unwrap();
     let hashes = monero_rx::create_ordered_transaction_hashes_from_block(&mblock);
     let merkle_root = monero_rx::tree_hash(&hashes).unwrap();
@@ -187,7 +164,8 @@ fn add_monero_data(tblock: &mut Block, seed_key: &str) {
         coinbase_merkle_proof,
         coinbase_tx: mblock.miner_tx,
     };
-    let serialized = monero_rx::serialize(&monero_data);
+    let mut serialized = Vec::new();
+    monero_data.consensus_encode(&mut serialized).unwrap();
     tblock.header.pow.pow_algo = PowAlgorithm::Monero;
     tblock.header.pow.pow_data = serialized;
 }
@@ -533,7 +511,7 @@ OutputFeatures::default()),
 
     // check mmr roots
     let mut new_block = db.prepare_new_block(template).unwrap();
-    new_block.header.output_mr = Vec::new();
+    new_block.header.output_mr = FixedHash::zero();
     new_block.header.nonce = OsRng.next_u64();
 
     find_header_with_achieved_difficulty(&mut new_block.header, 10.into());
@@ -815,6 +793,6 @@ async fn test_block_sync_body_validator() {
     // lets the mmr root
     let (template, _) = chain_block_with_new_coinbase(&genesis, vec![tx01, tx02], &rules, &factories);
     let mut new_block = db.prepare_new_block(template).unwrap();
-    new_block.header.output_mr = Vec::new();
+    new_block.header.output_mr = FixedHash::zero();
     validator.validate_body(new_block).await.unwrap_err();
 }

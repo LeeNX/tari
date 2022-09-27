@@ -8,6 +8,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * The number of unique fields available. This always matches the number of variants in `OutputField`.
+ */
+#define OutputFields_NUM_FIELDS 10
+
 enum TariTypeTag {
   Text = 0,
   Utxo = 1,
@@ -60,13 +65,27 @@ struct Contact;
 
 struct ContactsLivenessData;
 
+struct Covenant;
+
 struct EmojiSet;
+
+/**
+ * value: u64 + tag: [u8; 16]
+ */
+struct EncryptedValue;
+
+struct FeePerGramStat;
 
 struct FeePerGramStatsResponse;
 
 struct InboundTransaction;
 
 struct OutboundTransaction;
+
+/**
+ * Options for UTXO's
+ */
+struct OutputFeatures;
 
 /**
  * Configuration for a comms node
@@ -138,6 +157,15 @@ struct TariSeedWords;
 
 struct TariWallet;
 
+/**
+ * The transaction kernel tracks the excess for a given transaction. For an explanation of what the excess is, and
+ * why it is necessary, refer to the
+ * [Mimblewimble TLU post](https://tlu.tarilabs.com/protocols/mimblewimble-1/sources/PITCHME.link.html?highlight=mimblewimble#mimblewimble).
+ * The kernel also tracks other transaction metadata, such as the lock height for the transaction (i.e. the earliest
+ * this transaction can be mined) and the transaction fee, in cleartext.
+ */
+struct TransactionKernel;
+
 struct TransactionSendStatus;
 
 struct TransportConfig;
@@ -157,7 +185,7 @@ struct TariCoinPreview {
   uint64_t fee;
 };
 
-typedef TransactionKernel TariTransactionKernel;
+typedef struct TransactionKernel TariTransactionKernel;
 
 /**
  * Define the explicit Public key implementation for the Tari base layer
@@ -261,11 +289,11 @@ typedef RistrettoComSig ComSignature;
 
 typedef ComSignature TariCommitmentSignature;
 
-typedef Covenant TariCovenant;
+typedef struct Covenant TariCovenant;
 
-typedef EncryptedValue TariEncryptedValue;
+typedef struct EncryptedValue TariEncryptedValue;
 
-typedef OutputFeatures TariOutputFeatures;
+typedef struct OutputFeatures TariOutputFeatures;
 
 typedef struct Contact TariContact;
 
@@ -287,7 +315,7 @@ typedef struct Balance TariBalance;
 
 typedef struct FeePerGramStatsResponse TariFeePerGramStats;
 
-typedef FeePerGramStat TariFeePerGramStat;
+typedef struct FeePerGramStat TariFeePerGramStat;
 
 struct TariUtxo {
   const char *commitment;
@@ -879,8 +907,6 @@ TariOutputFeatures *output_features_create_from_bytes(unsigned char version,
                                                       unsigned short output_type,
                                                       unsigned long long maturity,
                                                       const struct ByteVector *metadata,
-                                                      const struct ByteVector *unique_id,
-                                                      const struct ByteVector *parent_public_key,
                                                       int *error_out);
 
 /**
@@ -1232,13 +1258,14 @@ int liveness_data_get_message_type(TariContactsLivenessData *liveness_data,
  * |   0 | Online           |
  * |   1 | Offline          |
  * |   2 | NeverSeen        |
+ * |   3 | Banned           |
  *
  * # Safety
  * The ```liveness_data_destroy``` method must be called when finished with a TariContactsLivenessData to prevent a
  * memory leak
  */
-int liveness_data_get_online_status(TariContactsLivenessData *liveness_data,
-                                    int *error_out);
+const char *liveness_data_get_online_status(TariContactsLivenessData *liveness_data,
+                                            int *error_out);
 
 /**
  * Frees memory for a TariContactsLivenessData
@@ -2207,7 +2234,12 @@ struct TariPublicKeys *comms_list_connected_public_keys(struct TariWallet *walle
  * }
  * `callback_txo_validation_complete` - The callback function pointer matching the function signature. This is called
  * when a TXO validation process is completed. The request_key is used to identify which request this
- * callback references and the second parameter is a is a bool that returns if the validation was successful or not.
+ * callback references and the second parameter the second contains, weather it was successful, already busy, failed
+ * due to an internal failure or failed due to a communication failure.
+ *     TxoValidationSuccess,               // 0
+ *     TxoValidationAlreadyBusy            // 1
+ *     TxoValidationInternalFailure        // 2
+ *     TxoValidationCommunicationFailure   // 3
  * `callback_contacts_liveness_data_updated` - The callback function pointer matching the function signature. This is
  * called when a contact's liveness status changed. The data represents the contact's updated status information.
  * `callback_balance_updated` - The callback function pointer matching the function signature. This is called whenever
@@ -2253,7 +2285,7 @@ struct TariWallet *wallet_create(TariCommsConfig *config,
                                  void (*callback_faux_transaction_unconfirmed)(TariCompletedTransaction*, uint64_t),
                                  void (*callback_transaction_send_result)(unsigned long long, TariTransactionSendStatus*),
                                  void (*callback_transaction_cancellation)(TariCompletedTransaction*, uint64_t),
-                                 void (*callback_txo_validation_complete)(uint64_t, bool),
+                                 void (*callback_txo_validation_complete)(uint64_t, uint64_t),
                                  void (*callback_contacts_liveness_data_updated)(TariContactsLivenessData*),
                                  void (*callback_balance_updated)(TariBalance*),
                                  void (*callback_transaction_validation_complete)(uint64_t, bool),
@@ -2626,6 +2658,8 @@ void balance_destroy(TariBalance *balance);
  * `wallet` - The TariWallet pointer
  * `dest_public_key` - The TariPublicKey pointer of the peer
  * `amount` - The amount
+ * `commitments` - A `TariVector` of "strings", tagged as `TariTypeTag::String`, containing commitment's hex values
+ *   (see `Commitment::to_hex()`)
  * `fee_per_gram` - The transaction fee
  * `message` - The pointer to a char array
  * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null. Functions
@@ -2640,6 +2674,7 @@ void balance_destroy(TariBalance *balance);
 unsigned long long wallet_send_transaction(struct TariWallet *wallet,
                                            TariPublicKey *dest_public_key,
                                            unsigned long long amount,
+                                           struct TariVector *commitments,
                                            unsigned long long fee_per_gram,
                                            const char *message,
                                            bool one_sided,
@@ -2651,6 +2686,8 @@ unsigned long long wallet_send_transaction(struct TariWallet *wallet,
  * ## Arguments
  * `wallet` - The TariWallet pointer
  * `amount` - The amount
+ * `commitments` - A `TariVector` of "strings", tagged as `TariTypeTag::String`, containing commitment's hex values
+ *   (see `Commitment::to_hex()`)
  * `fee_per_gram` - The fee per gram
  * `num_kernels` - The number of transaction kernels
  * `num_outputs` - The number of outputs
@@ -2665,6 +2702,7 @@ unsigned long long wallet_send_transaction(struct TariWallet *wallet,
  */
 unsigned long long wallet_get_fee_estimate(struct TariWallet *wallet,
                                            unsigned long long amount,
+                                           struct TariVector *commitments,
                                            unsigned long long fee_per_gram,
                                            unsigned long long num_kernels,
                                            unsigned long long num_outputs,
@@ -2923,6 +2961,8 @@ TariPublicKey *wallet_get_public_key(struct TariWallet *wallet,
  * `script_private_key` - Tari script private key, k_S, is used to create the script signature
  * `covenant` - The covenant that will be executed when spending this output
  * `message` - The message that the transaction will have
+ * `encrypted_value` - Encrypted value.
+ * `minimum_value_promise` - The minimum value of the commitment that is proven by the range proof
  * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null. Functions
  * as an out parameter.
  *

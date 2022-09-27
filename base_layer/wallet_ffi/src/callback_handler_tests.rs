@@ -71,7 +71,10 @@ mod test {
         pub tx_cancellation_callback_called_completed: bool,
         pub tx_cancellation_callback_called_inbound: bool,
         pub tx_cancellation_callback_called_outbound: bool,
-        pub callback_txo_validation_complete: u32,
+        pub callback_txo_validation_completed: bool,
+        pub callback_txo_validation_communication_failure: bool,
+        pub callback_txo_validation_internal_failure: bool,
+        pub callback_txo_validation_already_busy: bool,
         pub callback_contacts_liveness_data_updated: u32,
         pub callback_balance_updated: u32,
         pub callback_transaction_validation_complete: u32,
@@ -93,7 +96,10 @@ mod test {
                 direct_send_callback_called: 0,
                 store_and_forward_send_callback_called: 0,
                 transaction_queued_for_retry_callback_called: 0,
-                callback_txo_validation_complete: 0,
+                callback_txo_validation_completed: false,
+                callback_txo_validation_communication_failure: false,
+                callback_txo_validation_internal_failure: false,
+                callback_txo_validation_already_busy: false,
                 callback_contacts_liveness_data_updated: 0,
                 callback_balance_updated: 0,
                 callback_transaction_validation_complete: 0,
@@ -198,9 +204,15 @@ mod test {
         Box::from_raw(tx);
     }
 
-    unsafe extern "C" fn txo_validation_complete_callback(_tx_id: u64, result: bool) {
+    unsafe extern "C" fn txo_validation_complete_callback(_tx_id: u64, result: u64) {
         let mut lock = CALLBACK_STATE.lock().unwrap();
-        lock.callback_txo_validation_complete += u32::from(result);
+        match result {
+            0 => lock.callback_txo_validation_completed = true,
+            1 => lock.callback_txo_validation_already_busy = true,
+            2 => lock.callback_txo_validation_communication_failure = true,
+            3 => lock.callback_txo_validation_internal_failure = true,
+            _ => (),
+        }
         drop(lock);
     }
 
@@ -247,8 +259,7 @@ mod test {
             "1".to_string(),
             Utc::now().naive_utc(),
         );
-        runtime
-            .block_on(db.add_pending_inbound_transaction(1u64.into(), inbound_tx.clone()))
+        db.add_pending_inbound_transaction(1u64.into(), inbound_tx.clone())
             .unwrap();
 
         let completed_tx = CompletedTransaction::new(
@@ -272,8 +283,7 @@ mod test {
             None,
             None,
         );
-        runtime
-            .block_on(db.insert_completed_transaction(2u64.into(), completed_tx.clone()))
+        db.insert_completed_transaction(2u64.into(), completed_tx.clone())
             .unwrap();
 
         let stp = SenderTransactionProtocol::new_placeholder();
@@ -288,29 +298,25 @@ mod test {
             Utc::now().naive_utc(),
             false,
         );
-        runtime
-            .block_on(db.add_pending_outbound_transaction(3u64.into(), outbound_tx.clone()))
+        db.add_pending_outbound_transaction(3u64.into(), outbound_tx.clone())
             .unwrap();
-        runtime.block_on(db.cancel_pending_transaction(3u64.into())).unwrap();
+        db.cancel_pending_transaction(3u64.into()).unwrap();
 
         let inbound_tx_cancelled = InboundTransaction {
             tx_id: 4u64.into(),
             ..inbound_tx.clone()
         };
-        runtime
-            .block_on(db.add_pending_inbound_transaction(4u64.into(), inbound_tx_cancelled))
+        db.add_pending_inbound_transaction(4u64.into(), inbound_tx_cancelled)
             .unwrap();
-        runtime.block_on(db.cancel_pending_transaction(4u64.into())).unwrap();
+        db.cancel_pending_transaction(4u64.into()).unwrap();
 
         let completed_tx_cancelled = CompletedTransaction {
             tx_id: 5u64.into(),
             ..completed_tx.clone()
         };
-        runtime
-            .block_on(db.insert_completed_transaction(5u64.into(), completed_tx_cancelled.clone()))
+        db.insert_completed_transaction(5u64.into(), completed_tx_cancelled.clone())
             .unwrap();
-        runtime
-            .block_on(db.reject_completed_transaction(5u64.into(), TxCancellationReason::Unknown))
+        db.reject_completed_transaction(5u64.into(), TxCancellationReason::Unknown)
             .unwrap();
 
         let faux_unconfirmed_tx = CompletedTransaction::new(
@@ -334,8 +340,7 @@ mod test {
             Some(2),
             Some(NaiveDateTime::from_timestamp(0, 0)),
         );
-        runtime
-            .block_on(db.insert_completed_transaction(6u64.into(), faux_unconfirmed_tx.clone()))
+        db.insert_completed_transaction(6u64.into(), faux_unconfirmed_tx.clone())
             .unwrap();
 
         let faux_confirmed_tx = CompletedTransaction::new(
@@ -359,8 +364,7 @@ mod test {
             Some(5),
             Some(NaiveDateTime::from_timestamp(0, 0)),
         );
-        runtime
-            .block_on(db.insert_completed_transaction(7u64.into(), faux_confirmed_tx.clone()))
+        db.insert_completed_transaction(7u64.into(), faux_confirmed_tx.clone())
             .unwrap();
 
         let (transaction_event_sender, transaction_event_receiver) = broadcast::channel(20);
@@ -607,9 +611,14 @@ mod test {
             .unwrap();
 
         oms_event_sender
-            .send(Arc::new(OutputManagerEvent::TxoValidationFailure(1u64)))
+            .send(Arc::new(OutputManagerEvent::TxoValidationCommunicationFailure(1u64)))
             .unwrap();
-
+        oms_event_sender
+            .send(Arc::new(OutputManagerEvent::TxoValidationInternalFailure(1u64)))
+            .unwrap();
+        oms_event_sender
+            .send(Arc::new(OutputManagerEvent::TxoValidationAlreadyBusy(1u64)))
+            .unwrap();
         transaction_event_sender
             .send(Arc::new(TransactionEvent::TransactionValidationCompleted(3u64.into())))
             .unwrap();
@@ -722,7 +731,10 @@ mod test {
         assert!(lock.tx_cancellation_callback_called_completed);
         assert!(lock.tx_cancellation_callback_called_outbound);
         assert!(lock.saf_messages_received);
-        assert_eq!(lock.callback_txo_validation_complete, 3);
+        assert!(lock.callback_txo_validation_completed);
+        assert!(lock.callback_txo_validation_communication_failure);
+        assert!(lock.callback_txo_validation_already_busy);
+        assert!(lock.callback_txo_validation_internal_failure);
         assert_eq!(lock.callback_contacts_liveness_data_updated, 2);
         assert_eq!(lock.callback_balance_updated, 7);
         assert_eq!(lock.callback_transaction_validation_complete, 7);

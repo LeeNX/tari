@@ -248,6 +248,16 @@ impl ConnectivityManagerActor {
                         .cloned(),
                 );
             },
+            GetPeerStats(node_id, reply) => {
+                let peer = match self.peer_manager.find_by_node_id(&node_id).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!(target: LOG_TARGET, "Error when retrieving peer: {:?}", e);
+                        None
+                    },
+                };
+                let _result = reply.send(peer);
+            },
             GetAllConnectionStates(reply) => {
                 let states = self.pool.all().into_iter().cloned().collect();
                 let _result = reply.send(states);
@@ -382,9 +392,18 @@ impl ConnectivityManagerActor {
     }
 
     async fn reap_inactive_connections(&mut self) {
-        let connections = self
+        let excess_connections = self
             .pool
-            .get_inactive_connections_mut(self.config.reaper_min_inactive_age);
+            .count_connected()
+            .saturating_sub(self.config.reaper_min_connection_threshold);
+        if excess_connections == 0 {
+            return;
+        }
+
+        let mut connections = self
+            .pool
+            .get_inactive_outbound_connections_mut(self.config.reaper_min_inactive_age);
+        connections.truncate(excess_connections as usize);
         for conn in connections {
             if !conn.is_connected() {
                 continue;
@@ -392,8 +411,9 @@ impl ConnectivityManagerActor {
 
             debug!(
                 target: LOG_TARGET,
-                "Disconnecting '{}' because connection was inactive",
-                conn.peer_node_id().short_str()
+                "Disconnecting '{}' because connection was inactive ({} handles)",
+                conn.peer_node_id().short_str(),
+                conn.handle_count()
             );
             if let Err(err) = conn.disconnect().await {
                 // Already disconnected
@@ -546,6 +566,15 @@ impl ConnectivityManagerActor {
             PeerConnected(conn) => (conn.peer_node_id(), ConnectionStatus::Connected, Some(conn.clone())),
 
             PeerConnectFailed(node_id, ConnectionManagerError::DialCancelled) => {
+                if let Some(conn) = self.pool.get_connection(node_id) {
+                    if conn.is_connected() && conn.direction().is_inbound() {
+                        debug!(
+                            target: LOG_TARGET,
+                            "Ignoring DialCancelled({}) event because an inbound connection already exists", node_id
+                        );
+                        return Ok(());
+                    }
+                }
                 debug!(
                     target: LOG_TARGET,
                     "Dial was cancelled before connection completed to peer '{}'", node_id

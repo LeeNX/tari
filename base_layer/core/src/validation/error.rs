@@ -20,7 +20,7 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use tari_common_types::types::{FixedHash, HashOutput};
+use tari_common_types::types::{FixedHash, FixedHashSizeError, HashOutput};
 use tari_crypto::errors::RangeProofError;
 use thiserror::Error;
 use tokio::task;
@@ -31,7 +31,6 @@ use crate::{
     covenants::CovenantError,
     proof_of_work::{monero_rx::MergeMineError, PowError},
     transactions::transaction_components::{OutputType, TransactionError},
-    validation::dan_validators::DanLayerValidationError,
 };
 
 #[derive(Debug, Error)]
@@ -114,14 +113,14 @@ pub enum ValidationError {
     },
     #[error("Consensus Error: {0}")]
     ConsensusError(String),
+    #[error("Duplicate kernel Error: {0}")]
+    DuplicateKernelError(String),
     #[error("Covenant failed to validate: {0}")]
     CovenantError(#[from] CovenantError),
     #[error("Invalid or unsupported blockchain version {version}")]
     InvalidBlockchainVersion { version: u16 },
     #[error("Standard transaction contains coinbase output")]
     ErroneousCoinbaseOutput,
-    #[error("Digital Asset Network Error: {0}")]
-    DanLayerError(#[from] DanLayerValidationError),
     #[error(
         "Output was flagged as a {output_type} but contained sidechain feature data with contract_id {contract_id}"
     )]
@@ -131,6 +130,10 @@ pub enum ValidationError {
     },
     #[error("Contains Invalid Burn: {0}")]
     InvalidBurnError(String),
+    #[error("Output type '{output_type}' is not permitted")]
+    OutputTypeNotPermitted { output_type: OutputType },
+    #[error("FixedHash size error: {0}")]
+    FixedHashSizeError(#[from] FixedHashSizeError),
 }
 
 // ChainStorageError has a ValidationError variant, so to prevent a cyclic dependency we use a string representation in

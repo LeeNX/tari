@@ -27,6 +27,7 @@ use std::{
 
 use config::Config;
 use serde::{Deserialize, Serialize};
+use tari_app_utilities::consts;
 use tari_common::{
     configuration::{serializers, CommonConfig, Network, StringList},
     ConfigurationError,
@@ -129,8 +130,6 @@ pub struct BaseNodeConfig {
     pub metadata_auto_ping_interval: Duration,
     /// The state_machine config settings
     pub state_machine: BaseNodeStateMachineConfig,
-    /// Resize the CLI terminal on startup to a pre-defined size, or keep user settings
-    pub resize_terminal_on_startup: bool,
     /// Obscure GRPC error responses
     pub report_grpc_error: bool,
 }
@@ -139,6 +138,7 @@ impl Default for BaseNodeConfig {
     fn default() -> Self {
         let p2p = P2pConfig {
             datastore_path: PathBuf::from("peer_db/base_node"),
+            user_agent: format!("tari/basenode/{}", consts::APP_VERSION_NUMBER),
             ..Default::default()
         };
         Self {
@@ -164,7 +164,6 @@ impl Default for BaseNodeConfig {
             buffer_rate_limit: 1_000,
             metadata_auto_ping_interval: Duration::from_secs(30),
             state_machine: Default::default(),
-            resize_terminal_on_startup: true,
             report_grpc_error: false,
         }
     }

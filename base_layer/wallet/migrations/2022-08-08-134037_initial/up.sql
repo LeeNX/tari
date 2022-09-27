@@ -119,6 +119,7 @@ CREATE TABLE outputs (
     encrypted_value            BLOB                NOT NULL,
     contract_id                BLOB                NULL,
     minimum_value_promise    BIGINT              NOT NULL,
+    source                     INTEGER             NOT NULL DEFAULT 0,
     CONSTRAINT unique_commitment UNIQUE (commitment)
 );
 

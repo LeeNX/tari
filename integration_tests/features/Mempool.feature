@@ -88,7 +88,6 @@ Feature: Mempool
     Then SENDER has TX1 in NOT_STORED state
     Then SENDER has TX2 in MINED state
 
-  @flaky
   Scenario: Mempool clearing out invalid transactions after a reorg
     Given I have a seed node SEED_A
     And I have a base node NODE_A connected to seed SEED_A
@@ -177,22 +176,5 @@ Feature: Mempool
     When I create a custom fee transaction TX1 spending CB1 to UTX1 with fee 16
     When I submit transaction TX1 to BN1
     Then I wait until base node BN1 has 1 unconfirmed transactions in its mempool
-    When I mine 1 blocks on BN1
-    Then I wait until base node BN1 has 0 unconfirmed transactions in its mempool
-
-  Scenario: Mempool does not include duplicate unique IDs
-    Given I have 1 seed nodes
-    And I have a base node BN1 connected to all seed nodes
-    When I mine a block on BN1 with coinbase CB1
-    When I mine a block on BN1 with coinbase CB2
-    When I mine 2 blocks on BN1
-    When I create a custom transaction TX1 spending CB1 to UTX1 with fee 16 and unique ID 'moucky-mise'
-    When I create a custom transaction TX2 spending UTX1 to UTX2 with fee 16 and unique ID 'moucky-mise'
-    When I submit transaction TX1 to BN1
-    When I submit transaction TX2 to BN1
-    Then I wait until base node BN1 has 2 unconfirmed transactions in its mempool
-    When I mine 1 blocks on BN1
-    Then I wait until base node BN1 has 1 unconfirmed transactions in its mempool
-    When I mine 1 blocks on BN1
     When I mine 1 blocks on BN1
     Then I wait until base node BN1 has 0 unconfirmed transactions in its mempool

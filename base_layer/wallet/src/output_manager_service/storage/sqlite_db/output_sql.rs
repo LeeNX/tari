@@ -22,7 +22,7 @@
 
 use std::convert::{TryFrom, TryInto};
 
-use aes_gcm::Aes256Gcm;
+use chacha20poly1305::XChaCha20Poly1305;
 use chrono::NaiveDateTime;
 use derivative::Derivative;
 use diesel::{prelude::*, sql_query, SqliteConnection};
@@ -41,7 +41,6 @@ use tari_core::{
 };
 use tari_crypto::{commitment::HomomorphicCommitmentFactory, tari_utilities::ByteArray};
 use tari_script::{ExecutionStack, TariScript};
-use tari_utilities::hash::Hashable;
 
 use crate::{
     output_manager_service::{
@@ -52,6 +51,7 @@ use crate::{
             database::{OutputBackendQuery, SortDirection},
             models::DbUnblindedOutput,
             sqlite_db::{UpdateOutput, UpdateOutputSql},
+            OutputSource,
             OutputStatus,
         },
         UtxoSelectionFilter,
@@ -97,15 +97,13 @@ pub struct OutputSql {
     pub spent_in_tx_id: Option<i64>,
     pub coinbase_block_height: Option<i64>,
     pub metadata: Option<Vec<u8>>,
-    pub features_parent_public_key: Option<Vec<u8>>,
-    pub features_unique_id: Option<Vec<u8>>,
     pub features_json: String,
     pub spending_priority: i32,
     pub covenant: Vec<u8>,
     pub mined_timestamp: Option<NaiveDateTime>,
     pub encrypted_value: Vec<u8>,
-    pub contract_id: Option<Vec<u8>>,
     pub minimum_value_promise: i64,
+    pub source: i32,
 }
 
 impl OutputSql {
@@ -132,9 +130,7 @@ impl OutputSql {
         let mut query = outputs::table
             .into_boxed()
             .filter(outputs::script_lock_height.le(q.tip_height))
-            .filter(outputs::maturity.le(q.tip_height))
-            .filter(outputs::features_unique_id.is_null())
-            .filter(outputs::features_parent_public_key.is_null());
+            .filter(outputs::maturity.le(q.tip_height));
 
         if let Some((offset, limit)) = q.pagination {
             query = query.offset(offset).limit(limit);
@@ -212,15 +208,11 @@ impl OutputSql {
                     outputs::output_type
                         .eq(i32::from(OutputType::Standard.as_byte()))
                         .or(outputs::output_type.eq(i32::from(OutputType::Coinbase.as_byte()))),
-                )
-            },
-            UtxoSelectionFilter::TokenOutput {
-                parent_public_key,
-                unique_id,
-            } => {
-                query = query
-                    .filter(outputs::features_unique_id.eq(unique_id))
-                    .filter(outputs::features_parent_public_key.eq(parent_public_key.as_ref().map(|pk| pk.to_vec())));
+                );
+
+                if selection_criteria.excluding_onesided {
+                    query = query.filter(outputs::source.ne(OutputSource::OneSided as i32));
+                }
             },
             UtxoSelectionFilter::SpecificOutputs { commitments } => {
                 query = match commitments.len() {
@@ -230,14 +222,6 @@ impl OutputSql {
                         outputs::commitment.eq_any::<Vec<Vec<u8>>>(commitments.iter().map(|c| c.to_vec()).collect()),
                     ),
                 };
-            },
-            UtxoSelectionFilter::ContractOutput {
-                contract_id,
-                output_type,
-            } => {
-                query = query
-                    .filter(outputs::contract_id.eq(contract_id.as_slice()))
-                    .filter(outputs::output_type.eq(i32::from(output_type.as_byte())));
             },
         }
 
@@ -259,8 +243,6 @@ impl OutputSql {
                     .filter(outputs::status.eq(OutputStatus::Unspent as i32))
                     .filter(outputs::script_lock_height.le(i64_tip_height))
                     .filter(outputs::maturity.le(i64_tip_height))
-                    .filter(outputs::features_unique_id.is_null())
-                    .filter(outputs::features_parent_public_key.is_null())
                     .order(outputs::value.desc())
                     .select(outputs::value)
                     .first(conn)
@@ -317,7 +299,8 @@ impl OutputSql {
             .filter(
                 outputs::status
                     .eq(OutputStatus::UnspentMinedUnconfirmed as i32)
-                    .or(outputs::mined_in_block.is_null()),
+                    .or(outputs::mined_in_block.is_null())
+                    .or(outputs::mined_height.is_null()),
             )
             .order(outputs::id.asc())
             .load(conn)?)
@@ -347,7 +330,7 @@ impl OutputSql {
             // Return outputs not marked as deleted or confirmed
             .filter(outputs::marked_deleted_in_block.is_null().or(outputs::status.eq(OutputStatus::SpentMinedUnconfirmed as i32)))
             // Only return mined
-            .filter(outputs::mined_in_block.is_not_null())
+            .filter(outputs::mined_in_block.is_not_null().and(outputs::mined_height.is_not_null()))
             .order(outputs::id.asc())
             .load(conn)?)
     }
@@ -409,7 +392,7 @@ impl OutputSql {
                  FROM outputs WHERE status = ? AND maturity > ? OR script_lock_height > ? \
                  UNION ALL \
                  SELECT coalesce(sum(value), 0) as amount, 'pending_incoming_balance' as category \
-                 FROM outputs WHERE status = ? OR status = ? OR status = ? \
+                 FROM outputs WHERE source != ? AND status = ? OR status = ? OR status = ? \
                  UNION ALL \
                  SELECT coalesce(sum(value), 0) as amount, 'pending_outgoing_balance' as category \
                  FROM outputs WHERE status = ? OR status = ? OR status = ?",
@@ -421,6 +404,7 @@ impl OutputSql {
                 .bind::<diesel::sql_types::BigInt, _>(current_tip as i64)
                 .bind::<diesel::sql_types::BigInt, _>(current_tip as i64)
                 // pending_incoming_balance
+                .bind::<diesel::sql_types::Integer, _>(OutputSource::Coinbase as i32)
                 .bind::<diesel::sql_types::Integer, _>(OutputStatus::EncumberedToBeReceived as i32)
                 .bind::<diesel::sql_types::Integer, _>(OutputStatus::ShortTermEncumberedToBeReceived as i32)
                 .bind::<diesel::sql_types::Integer, _>(OutputStatus::UnspentMinedUnconfirmed as i32)
@@ -435,7 +419,7 @@ impl OutputSql {
                  FROM outputs WHERE status = ? \
                  UNION ALL \
                  SELECT coalesce(sum(value), 0) as amount, 'pending_incoming_balance' as category \
-                 FROM outputs WHERE status = ? OR status = ? OR status = ? \
+                 FROM outputs WHERE source != ? AND status = ? OR status = ? OR status = ? \
                  UNION ALL \
                  SELECT coalesce(sum(value), 0) as amount, 'pending_outgoing_balance' as category \
                  FROM outputs WHERE status = ? OR status = ? OR status = ?",
@@ -443,6 +427,7 @@ impl OutputSql {
                 // available_balance
                 .bind::<diesel::sql_types::Integer, _>(OutputStatus::Unspent as i32)
                 // pending_incoming_balance
+                .bind::<diesel::sql_types::Integer, _>(OutputSource::Coinbase as i32)
                 .bind::<diesel::sql_types::Integer, _>(OutputStatus::EncumberedToBeReceived as i32)
                 .bind::<diesel::sql_types::Integer, _>(OutputStatus::ShortTermEncumberedToBeReceived as i32)
                 .bind::<diesel::sql_types::Integer, _>(OutputStatus::UnspentMinedUnconfirmed as i32)
@@ -497,6 +482,29 @@ impl OutputSql {
         Ok(outputs::table
             .filter(outputs::commitment.eq(commitment))
             .first::<OutputSql>(conn)?)
+    }
+
+    pub fn find_by_commitments_excluding_status(
+        commitments: Vec<&[u8]>,
+        status: OutputStatus,
+        conn: &SqliteConnection,
+    ) -> Result<Vec<OutputSql>, OutputManagerStorageError> {
+        Ok(outputs::table
+            .filter(outputs::commitment.eq_any(commitments))
+            .filter(outputs::status.ne(status as i32))
+            .load(conn)?)
+    }
+
+    pub fn update_by_commitments(
+        commitments: Vec<&[u8]>,
+        updated_output: UpdateOutput,
+        conn: &SqliteConnection,
+    ) -> Result<usize, OutputManagerStorageError> {
+        Ok(
+            diesel::update(outputs::table.filter(outputs::commitment.eq_any(commitments)))
+                .set(UpdateOutputSql::from(updated_output))
+                .execute(conn)?,
+        )
     }
 
     pub fn find_by_commitment_and_cancelled(
@@ -717,7 +725,15 @@ impl TryFrom<OutputSql> for DbUnblindedOutput {
                 let factories = CryptoFactories::default();
                 unblinded_output.as_transaction_output(&factories)?.hash()
             },
-            Some(v) => v,
+            Some(v) => match v.try_into() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: LOG_TARGET, "Malformed transaction hash: {}", e);
+                    return Err(OutputManagerStorageError::ConversionError {
+                        reason: "Malformed transaction hash".to_string(),
+                    });
+                },
+            },
         };
         let commitment = match o.commitment {
             None => {
@@ -729,23 +745,38 @@ impl TryFrom<OutputSql> for DbUnblindedOutput {
             Some(c) => Commitment::from_vec(&c)?,
         };
         let spending_priority = (o.spending_priority as u32).into();
+        let mined_in_block = match o.mined_in_block {
+            Some(v) => match v.try_into() {
+                Ok(v) => Some(v),
+                Err(_) => None,
+            },
+            None => None,
+        };
+        let marked_deleted_in_block = match o.marked_deleted_in_block {
+            Some(v) => match v.try_into() {
+                Ok(v) => Some(v),
+                Err(_) => None,
+            },
+            None => None,
+        };
         Ok(Self {
             commitment,
             unblinded_output,
             hash,
             status: o.status.try_into()?,
             mined_height: o.mined_height.map(|mh| mh as u64),
-            mined_in_block: o.mined_in_block,
+            mined_in_block,
             mined_mmr_position: o.mined_mmr_position.map(|mp| mp as u64),
             mined_timestamp: o.mined_timestamp,
             marked_deleted_at_height: o.marked_deleted_at_height.map(|d| d as u64),
-            marked_deleted_in_block: o.marked_deleted_in_block,
+            marked_deleted_in_block,
             spending_priority,
+            source: o.source.try_into()?,
         })
     }
 }
 
-impl Encryptable<Aes256Gcm> for OutputSql {
+impl Encryptable<XChaCha20Poly1305> for OutputSql {
     fn domain(&self, field_name: &'static str) -> Vec<u8> {
         // WARNING: using `OUTPUT` for both NewOutputSql and OutputSql due to later transition without re-encryption
         [Self::OUTPUT, self.script.as_slice(), field_name.as_bytes()]
@@ -753,7 +784,7 @@ impl Encryptable<Aes256Gcm> for OutputSql {
             .to_vec()
     }
 
-    fn encrypt(&mut self, cipher: &Aes256Gcm) -> Result<(), String> {
+    fn encrypt(&mut self, cipher: &XChaCha20Poly1305) -> Result<(), String> {
         self.spending_key =
             encrypt_bytes_integral_nonce(cipher, self.domain("spending_key"), self.spending_key.clone())?;
 
@@ -766,7 +797,7 @@ impl Encryptable<Aes256Gcm> for OutputSql {
         Ok(())
     }
 
-    fn decrypt(&mut self, cipher: &Aes256Gcm) -> Result<(), String> {
+    fn decrypt(&mut self, cipher: &XChaCha20Poly1305) -> Result<(), String> {
         self.spending_key =
             decrypt_bytes_integral_nonce(cipher, self.domain("spending_key"), self.spending_key.clone())?;
 

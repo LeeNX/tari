@@ -79,8 +79,8 @@ impl CliLoop {
     ///
     /// ## Returns
     /// Doesn't return anything
-    pub async fn cli_loop(mut self, resize_terminal_on_startup: bool) {
-        cli::print_banner(self.commands.clone(), 3, resize_terminal_on_startup);
+    pub async fn cli_loop(mut self) {
+        cli::print_banner(self.commands.clone(), 3);
 
         if self.non_interactive {
             self.watch_loop_non_interactive().await;
@@ -129,11 +129,9 @@ impl CliLoop {
             } else {
                 let mut events = EventStream::new();
                 loop {
-                    terminal::enable_raw_mode().ok();
                     let interval = time::sleep(interval);
                     tokio::select! {
                         _ = interval => {
-                            terminal::disable_raw_mode().ok();
                             if let Err(err) = self.context.handle_command_str(line).await {
                                 println!("Watched command `{}` failed: {}", line, err);
                             }

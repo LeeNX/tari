@@ -28,9 +28,9 @@ use std::{
 
 use log::*;
 use strum_macros::Display;
-use tari_common_types::types::{BlockHash, HashOutput, PublicKey};
+use tari_common_types::types::{BlockHash, HashOutput};
 use tari_comms::{connectivity::ConnectivityRequester, peer_manager::NodeId};
-use tari_utilities::{hash::Hashable, hex::Hex, ByteArray};
+use tari_utilities::hex::Hex;
 use tokio::sync::Semaphore;
 
 use crate::{
@@ -70,7 +70,7 @@ pub enum BlockEvent {
     AddBlockErrored {
         block: Arc<Block>,
     },
-    BlockSyncComplete(Arc<ChainBlock>),
+    BlockSyncComplete(Arc<ChainBlock>, u64),
     BlockSyncRewind(Vec<Arc<ChainBlock>>),
 }
 
@@ -305,7 +305,7 @@ where B: BlockchainBackend + 'static
                     transactions.len(),
                 );
 
-                let prev_hash = header.prev_hash.clone();
+                let prev_hash = header.prev_hash;
                 let height = header.height;
 
                 let block_template = NewBlockTemplate::from_block(
@@ -354,86 +354,6 @@ where B: BlockchainBackend + 'static
 
                 Ok(NodeCommsResponse::TransactionKernels(kernels))
             },
-            NodeCommsRequest::FetchTokens {
-                asset_public_key,
-                unique_ids,
-            } => {
-                debug!(target: LOG_TARGET, "Starting fetch tokens");
-                let mut outputs = vec![];
-                if unique_ids.is_empty() {
-                    // TODO: replace [0..1000] with parameters to allow paging
-                    for output in self
-                        .blockchain_db
-                        .fetch_all_unspent_by_parent_public_key(asset_public_key.clone(), 0..1000)
-                        .await?
-                    {
-                        let mined_height = output.mined_height;
-                        match output.output {
-                            PrunedOutput::Pruned { .. } => {
-                                // TODO: should we return this?
-                            },
-                            PrunedOutput::NotPruned { output } => outputs.push((output, mined_height)),
-                        }
-                    }
-                } else {
-                    for id in unique_ids {
-                        let output = self
-                            .blockchain_db
-                            .fetch_utxo_by_unique_id(Some(asset_public_key.clone()), id, None)
-                            .await?;
-                        if let Some(out) = output {
-                            match out.output {
-                                PrunedOutput::Pruned { .. } => {
-                                    // TODO: should we return this?
-                                },
-                                PrunedOutput::NotPruned { output } => outputs.push((output, out.mined_height)),
-                            }
-                        }
-                    }
-                }
-                Ok(NodeCommsResponse::FetchTokensResponse { outputs })
-            },
-            NodeCommsRequest::FetchContractOutputsForBlock {
-                block_hash,
-                output_type,
-            } => Ok(NodeCommsResponse::FetchOutputsForBlockResponse {
-                outputs: self
-                    .blockchain_db
-                    .fetch_contract_outputs_for_block(block_hash, output_type)
-                    .await?,
-            }),
-            NodeCommsRequest::FetchContractOutputsByContractId {
-                contract_id,
-                output_type,
-            } => Ok(NodeCommsResponse::FetchOutputsByContractIdResponse {
-                outputs: self
-                    .blockchain_db
-                    .fetch_contract_outputs_by_contract_id_and_type(contract_id, output_type)
-                    .await?,
-            }),
-            NodeCommsRequest::FetchAssetRegistrations { range } => {
-                let top_level_pubkey = PublicKey::default();
-                #[allow(clippy::range_plus_one)]
-                let exclusive_range = (*range.start())..(*range.end() + 1);
-                let outputs = self
-                    .blockchain_db
-                    .fetch_all_unspent_by_parent_public_key(top_level_pubkey, exclusive_range)
-                    .await?
-                    .into_iter()
-                    // TODO: should we return this?
-                    .filter(|o|!o.output.is_pruned())
-                    .collect();
-                Ok(NodeCommsResponse::FetchAssetRegistrationsResponse { outputs })
-            },
-            NodeCommsRequest::FetchAssetMetadata { asset_public_key } => {
-                let output = self
-                    .blockchain_db
-                    .fetch_utxo_by_unique_id(None, Vec::from(asset_public_key.as_bytes()), None)
-                    .await?;
-                Ok(NodeCommsResponse::FetchAssetMetadataResponse {
-                    output: Box::new(output),
-                })
-            },
             NodeCommsRequest::FetchMempoolTransactionsByExcessSigs { excess_sigs } => {
                 let (transactions, not_found) = self.mempool.retrieve_by_excess_sigs(excess_sigs).await?;
                 Ok(NodeCommsResponse::FetchMempoolTransactionsByExcessSigsResponse(
@@ -474,7 +394,7 @@ where B: BlockchainBackend + 'static
         let semaphore = self.new_block_request_semaphore.clone();
         let _permit = semaphore.acquire().await.unwrap();
 
-        if self.blockchain_db.block_exists(block_hash.clone()).await? {
+        if self.blockchain_db.block_exists(block_hash).await? {
             debug!(
                 target: LOG_TARGET,
                 "Block with hash `{}` already stored",

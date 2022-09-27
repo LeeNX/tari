@@ -81,18 +81,17 @@ use crate::{
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatsResponse {
-    pub total_txs: u64,
     pub unconfirmed_txs: u64,
     pub reorg_txs: u64,
-    pub total_weight: u64,
+    pub unconfirmed_weight: u64,
 }
 
 impl Display for StatsResponse {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
         write!(
             fmt,
-            "Mempool stats: Total transactions: {}, Unconfirmed: {}, Published: {}, Total Weight: {}g",
-            self.total_txs, self.unconfirmed_txs, self.reorg_txs, self.total_weight
+            "Mempool stats: Unconfirmed: {}, In Reorg Pool: {}, Total Weight: {}g",
+            self.unconfirmed_txs, self.reorg_txs, self.unconfirmed_weight
         )
     }
 }
@@ -112,6 +111,7 @@ pub enum TxStorageResponse {
     NotStoredAlreadySpent,
     NotStoredConsensus,
     NotStored,
+    NotStoredAlreadyMined,
 }
 
 impl TxStorageResponse {
@@ -130,6 +130,7 @@ impl Display for TxStorageResponse {
             TxStorageResponse::NotStoredAlreadySpent => "Not stored output already spent",
             TxStorageResponse::NotStoredConsensus => "Not stored due to consensus rule",
             TxStorageResponse::NotStored => "Not stored",
+            TxStorageResponse::NotStoredAlreadyMined => "Not stored tx already mined",
         };
         fmt.write_str(storage)
     }

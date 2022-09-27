@@ -31,7 +31,7 @@ mod benches {
 mod benches {
     use std::sync::Arc;
 
-    use criterion::{criterion_group, BatchSize, Criterion};
+    use criterion::{criterion_group, Criterion};
     use futures::future::try_join_all;
     use tari_common::configuration::Network;
     use tari_core::{
@@ -44,14 +44,11 @@ mod benches {
             CryptoFactories,
         },
         tx,
-        validation::{
-            dan_validators::TxDanLayerValidator,
-            transaction_validators::{
-                MempoolValidator,
-                TxConsensusValidator,
-                TxInputAndMaturityValidator,
-                TxInternalConsistencyValidator,
-            },
+        validation::transaction_validators::{
+            MempoolValidator,
+            TxConsensusValidator,
+            TxInputAndMaturityValidator,
+            TxInternalConsistencyValidator,
         },
     };
     use tokio::{runtime::Runtime, task};
@@ -88,8 +85,7 @@ mod benches {
                 db.clone(),
             )),
             Box::new(TxInputAndMaturityValidator::new(db.clone())),
-            Box::new(TxConsensusValidator::new(db.clone())),
-            Box::new(TxDanLayerValidator::new(db)),
+            Box::new(TxConsensusValidator::new(db)),
         ]);
         let mempool = Mempool::new(config, rules, Box::new(mempool_validator));
         const NUM_TXNS: usize = 100;
@@ -104,19 +100,14 @@ mod benches {
             NUM_TXNS,
             1000,
             MAX_TRANSACTION_OUTPUTS,
-            OutputFeatures::for_minting(Default::default(), Default::default(), vec![1, 2, 3], None),
+            OutputFeatures::default(),
         ));
         c.bench_function("Mempool Insert", move |b| {
-            let mut offset = 0;
-            b.iter_batched(
-                || {
-                    let batch = transactions[offset..offset + 10].to_vec();
-                    offset = (offset + 10) % NUM_TXNS;
-                    batch
-                },
-                |txns| runtime.block_on(async { mempool.insert_all(txns).await.unwrap() }),
-                BatchSize::SmallInput,
-            );
+            let mut idx = 0;
+            b.iter(|| {
+                runtime.block_on(async { mempool.insert(transactions[idx].clone()).await.unwrap() });
+                idx = (idx + 1) % NUM_TXNS;
+            });
         });
     }
 

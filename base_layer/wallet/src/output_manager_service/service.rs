@@ -62,7 +62,6 @@ use tari_core::{
 use tari_crypto::{
     commitment::HomomorphicCommitmentFactory,
     errors::RangeProofError,
-    hash::blake2::Blake256,
     keys::{DiffieHellmanSharedSecret, PublicKey as PublicKeyTrait, SecretKey},
     ristretto::RistrettoSecretKey,
 };
@@ -70,6 +69,7 @@ use tari_script::{inputs, script, Opcode, TariScript};
 use tari_service_framework::reply_channel;
 use tari_shutdown::ShutdownSignal;
 use tari_utilities::{hex::Hex, ByteArray};
+use tokio::sync::Mutex;
 
 use crate::{
     base_node_service::handle::{BaseNodeEvent, BaseNodeServiceHandle},
@@ -92,6 +92,7 @@ use crate::{
         storage::{
             database::{OutputBackendQuery, OutputManagerBackend, OutputManagerDatabase},
             models::{DbUnblindedOutput, KnownOneSidedPaymentScript, SpendingPriority},
+            OutputSource,
             OutputStatus,
         },
         tasks::TxoValidationTask,
@@ -113,6 +114,7 @@ pub struct OutputManagerService<TBackend, TWalletConnectivity, TKeyManagerInterf
     base_node_service: BaseNodeServiceHandle,
     last_seen_tip_height: Option<u64>,
     node_identity: Arc<NodeIdentity>,
+    validation_in_progress: Arc<Mutex<()>>,
 }
 
 impl<TBackend, TWalletConnectivity, TKeyManagerInterface>
@@ -168,6 +170,7 @@ where
             base_node_service,
             last_seen_tip_height: None,
             node_identity,
+            validation_in_progress: Arc::new(Mutex::new(())),
         })
     }
 
@@ -279,7 +282,7 @@ where
             OutputManagerRequest::PrepareToSendTransaction {
                 tx_id,
                 amount,
-                utxo_selection,
+                selection_criteria,
                 output_features,
                 fee_per_gram,
                 tx_meta,
@@ -291,7 +294,7 @@ where
                 .prepare_transaction_to_send(
                     tx_id,
                     amount,
-                    utxo_selection,
+                    selection_criteria,
                     fee_per_gram,
                     tx_meta,
                     message,
@@ -305,7 +308,7 @@ where
             OutputManagerRequest::CreatePayToSelfTransaction {
                 tx_id,
                 amount,
-                utxo_selection,
+                selection_criteria,
                 output_features,
                 fee_per_gram,
                 lock_height,
@@ -314,7 +317,7 @@ where
                 .create_pay_to_self_transaction(
                     tx_id,
                     amount,
-                    utxo_selection,
+                    selection_criteria,
                     *output_features,
                     fee_per_gram,
                     lock_height,
@@ -324,11 +327,12 @@ where
                 .map(OutputManagerResponse::PayToSelfTransaction),
             OutputManagerRequest::FeeEstimate {
                 amount,
+                selection_criteria,
                 fee_per_gram,
                 num_kernels,
                 num_outputs,
             } => self
-                .fee_estimate(amount, fee_per_gram, num_kernels, num_outputs)
+                .fee_estimate(amount, selection_criteria, fee_per_gram, num_kernels, num_outputs)
                 .await
                 .map(OutputManagerResponse::FeeEstimate),
             OutputManagerRequest::ConfirmPendingTransaction(tx_id) => self
@@ -445,10 +449,10 @@ where
             OutputManagerRequest::CreatePayToSelfWithOutputs {
                 outputs,
                 fee_per_gram,
-                input_selection,
+                selection_criteria,
             } => {
                 let (tx_id, transaction) = self
-                    .create_pay_to_self_containing_outputs(outputs, fee_per_gram, input_selection)
+                    .create_pay_to_self_containing_outputs(outputs, selection_criteria, fee_per_gram)
                     .await?;
                 Ok(OutputManagerResponse::CreatePayToSelfWithOutputs {
                     transaction: Box::new(transaction),
@@ -484,7 +488,7 @@ where
                 if last_height < height {
                     last_height = height;
                     max_mined_height = uo.mined_height;
-                    block_hash = uo.mined_in_block.clone();
+                    block_hash = uo.mined_in_block;
                 }
             }
         }
@@ -533,11 +537,13 @@ where
     }
 
     fn validate_outputs(&mut self) -> Result<u64, OutputManagerError> {
-        if !self.resources.connectivity.is_base_node_set() {
-            return Err(OutputManagerError::NoBaseNodeKeysProvided);
-        }
+        let current_base_node = self
+            .resources
+            .connectivity
+            .get_current_base_node_id()
+            .ok_or(OutputManagerError::NoBaseNodeKeysProvided)?;
         let id = OsRng.next_u64();
-        let utxo_validation = TxoValidationTask::new(
+        let txo_validation = TxoValidationTask::new(
             id,
             self.resources.db.clone(),
             self.resources.connectivity.clone(),
@@ -545,30 +551,87 @@ where
             self.resources.config.clone(),
         );
 
-        let shutdown = self.resources.shutdown_signal.clone();
+        let mut shutdown = self.resources.shutdown_signal.clone();
+        let mut base_node_watch = self.resources.connectivity.get_current_base_node_watcher();
         let event_publisher = self.resources.event_publisher.clone();
+        let validation_in_progress = self.validation_in_progress.clone();
         tokio::spawn(async move {
-            match utxo_validation.execute(shutdown).await {
-                Ok(id) => {
-                    info!(
-                        target: LOG_TARGET,
-                        "UTXO Validation Protocol (Id: {}) completed successfully", id
-                    );
-                },
-                Err(OutputManagerProtocolError { id, error }) => {
-                    warn!(
-                        target: LOG_TARGET,
-                        "Error completing UTXO Validation Protocol (Id: {}): {:?}", id, error
-                    );
-                    if let Err(e) = event_publisher.send(Arc::new(OutputManagerEvent::TxoValidationFailure(id))) {
+            // Note: We do not want the validation task to be queued
+            let mut _lock = match validation_in_progress.try_lock() {
+                Ok(val) => val,
+                _ => {
+                    if let Err(e) = event_publisher.send(Arc::new(OutputManagerEvent::TxoValidationAlreadyBusy(id))) {
                         debug!(
                             target: LOG_TARGET,
                             "Error sending event because there are no subscribers: {:?}", e
                         );
                     }
+                    debug!(
+                        target: LOG_TARGET,
+                        "UTXO Validation Protocol (Id: {}) spawned while a previous protocol was busy, ignored", id
+                    );
+                    return;
                 },
+            };
+
+            let exec_fut = txo_validation.execute();
+            tokio::pin!(exec_fut);
+            loop {
+                tokio::select! {
+                    result = &mut exec_fut => {
+                        match result {
+                            Ok(id) => {
+                                info!(
+                                    target: LOG_TARGET,
+                                    "UTXO Validation Protocol (Id: {}) completed successfully", id
+                                );
+                                return;
+                            },
+                            Err(OutputManagerProtocolError { id, error }) => {
+                                warn!(
+                                    target: LOG_TARGET,
+                                    "Error completing UTXO Validation Protocol (Id: {}): {:?}", id, error
+                                );
+                                let event_payload = match error {
+                                    OutputManagerError::InconsistentBaseNodeDataError(_) |
+                                    OutputManagerError::BaseNodeChanged |
+                                    OutputManagerError::Shutdown |
+                                    OutputManagerError::RpcError(_) =>
+                                        OutputManagerEvent::TxoValidationCommunicationFailure(id),
+                                    _ => OutputManagerEvent::TxoValidationInternalFailure(id),
+                                };
+                                if let Err(e) = event_publisher.send(Arc::new(event_payload)) {
+                                    debug!(
+                                        target: LOG_TARGET,
+                                        "Error sending event because there are no subscribers: {:?}", e
+                                    );
+                                }
+
+                                return;
+                            },
+                        }
+                    },
+                    _ = shutdown.wait() => {
+                        debug!(target: LOG_TARGET, "TXO Validation Protocol (Id: {}) shutting down because the system \
+                            is shutting down", id);
+                        return;
+                    },
+                    _ = base_node_watch.changed() => {
+                        if let Some(peer) = base_node_watch.borrow().as_ref() {
+                            if peer.node_id != current_base_node {
+                                debug!(
+                                    target: LOG_TARGET,
+                                    "TXO Validation Protocol (Id: {}) cancelled because base node changed", id
+                                );
+                                return;
+                            }
+                        }
+
+                    }
+                }
             }
         });
+
         Ok(id)
     }
 
@@ -589,7 +652,12 @@ where
             "Add output of value {} to Output Manager", output.value
         );
 
-        let output = DbUnblindedOutput::from_unblinded_output(output, &self.resources.factories, spend_priority)?;
+        let output = DbUnblindedOutput::from_unblinded_output(
+            output,
+            &self.resources.factories,
+            spend_priority,
+            OutputSource::default(),
+        )?;
         debug!(
             target: LOG_TARGET,
             "saving output of hash {} to Output Manager",
@@ -626,6 +694,7 @@ where
             &rewind_data,
             spend_priority,
             None,
+            OutputSource::default(),
         )?;
         debug!(
             target: LOG_TARGET,
@@ -661,7 +730,12 @@ where
             target: LOG_TARGET,
             "Add unvalidated output of value {} to Output Manager", output.value
         );
-        let output = DbUnblindedOutput::from_unblinded_output(output, &self.resources.factories, spend_priority)?;
+        let output = DbUnblindedOutput::from_unblinded_output(
+            output,
+            &self.resources.factories,
+            spend_priority,
+            OutputSource::default(),
+        )?;
         self.resources.db.add_unvalidated_output(tx_id, output)?;
         Ok(())
     }
@@ -773,6 +847,7 @@ where
             &self.resources.rewind_data,
             None,
             None,
+            OutputSource::default(),
         )?;
 
         self.resources
@@ -797,6 +872,7 @@ where
     async fn fee_estimate(
         &mut self,
         amount: MicroTari,
+        selection_criteria: UtxoSelectionCriteria,
         fee_per_gram: MicroTari,
         num_kernels: usize,
         num_outputs: usize,
@@ -821,15 +897,34 @@ where
                     Covenant::new().consensus_encode_exact_size(),
             );
 
-        let utxo_selection = self
+        let utxo_selection = match self
             .select_utxos(
                 amount,
+                selection_criteria,
                 fee_per_gram,
                 num_outputs,
                 metadata_byte_size * num_outputs,
-                UtxoSelectionCriteria::default(),
             )
-            .await?;
+            .await
+        {
+            Ok(v) => Ok(v),
+            Err(OutputManagerError::FundsPending | OutputManagerError::NotEnoughFunds) => {
+                debug!(
+                    target: LOG_TARGET,
+                    "We dont have enough funds available to make a fee estimate, so we estimate 1 input, no change"
+                );
+                let fee_calc = self.get_fee_calc();
+                let output_features_estimate = OutputFeatures::default();
+                let default_metadata_size = fee_calc.weighting().round_up_metadata_size(
+                    output_features_estimate.consensus_encode_exact_size() +
+                        Covenant::new().consensus_encode_exact_size() +
+                        script![Nop].consensus_encode_exact_size(),
+                );
+                let fee = fee_calc.calculate(fee_per_gram, 1, 1, num_outputs, default_metadata_size);
+                return Ok(Fee::normalize(fee));
+            },
+            Err(e) => Err(e),
+        }?;
 
         debug!(target: LOG_TARGET, "{} utxos selected.", utxo_selection.utxos.len());
 
@@ -846,7 +941,7 @@ where
         &mut self,
         tx_id: TxId,
         amount: MicroTari,
-        utxo_selection: UtxoSelectionCriteria,
+        selection_criteria: UtxoSelectionCriteria,
         fee_per_gram: MicroTari,
         tx_meta: TransactionMetadata,
         message: String,
@@ -859,7 +954,7 @@ where
             target: LOG_TARGET,
             "Preparing to send transaction. Amount: {}. UTXO Selection: {}. Fee per gram: {}. ",
             amount,
-            utxo_selection,
+            selection_criteria,
             fee_per_gram,
         );
         let metadata_byte_size = self
@@ -873,7 +968,7 @@ where
             );
 
         let input_selection = self
-            .select_utxos(amount, fee_per_gram, 1, metadata_byte_size, utxo_selection)
+            .select_utxos(amount, selection_criteria, fee_per_gram, 1, metadata_byte_size)
             .await?;
 
         let offset = PrivateKey::random(&mut OsRng);
@@ -926,7 +1021,7 @@ where
         }
 
         let stp = builder
-            .build::<Blake256>(
+            .build(
                 &self.resources.factories,
                 None,
                 self.last_seen_tip_height.unwrap_or(u64::MAX),
@@ -947,6 +1042,7 @@ where
                 &self.resources.rewind_data.clone(),
                 None,
                 None,
+                OutputSource::default(),
             )?);
         }
 
@@ -1008,19 +1104,12 @@ where
             &self.resources.rewind_data,
             None,
             None,
+            OutputSource::Coinbase,
         )?;
 
         // If there is no existing output available, we store the one we produced.
         match self.resources.db.fetch_by_commitment(output.commitment.clone()) {
-            Ok(outs) => {
-                if outs.is_empty() {
-                    self.resources
-                        .db
-                        .add_output_to_be_received(tx_id, output, Some(block_height))?;
-
-                    self.confirm_encumberance(tx_id)?;
-                }
-            },
+            Ok(_) => {},
             Err(OutputManagerStorageError::ValueNotFound) => {
                 self.resources
                     .db
@@ -1037,8 +1126,8 @@ where
     async fn create_pay_to_self_containing_outputs(
         &mut self,
         outputs: Vec<UnblindedOutputBuilder>,
-        fee_per_gram: MicroTari,
         selection_criteria: UtxoSelectionCriteria,
+        fee_per_gram: MicroTari,
     ) -> Result<(TxId, Transaction), OutputManagerError> {
         let total_value = outputs.iter().map(|o| o.value()).sum();
         let nop_script = script![Nop];
@@ -1055,10 +1144,10 @@ where
         let input_selection = self
             .select_utxos(
                 total_value,
+                selection_criteria,
                 fee_per_gram,
                 outputs.len(),
                 metadata_byte_size,
-                selection_criteria,
             )
             .await?;
         let offset = PrivateKey::random(&mut OsRng);
@@ -1114,59 +1203,13 @@ where
                 &self.resources.rewind_data,
                 None,
                 None,
+                OutputSource::default(),
             )?)
         }
 
-        // let mut change_keys = None;
-        //
-        // let fee = Fee::calculate(fee_per_gram, 1, inputs.len(), 1);
-        // let change_value = total.saturating_sub(fee);
-        // if change_value > 0.into() {
-        //     let (spending_key, script_private_key) = self
-        //         .resources
-        //         .master_key_manager
-        //         .get_next_spend_and_script_key()
-        //         .await?;
-        //     change_keys = Some((spending_key.clone(), script_private_key.clone()));
-        //     builder.with_change_secret(spending_key);
-        //     builder.with_rewindable_outputs(&self.resources.rewind_data.clone());
-        //     builder.with_change_script(
-        //         script!(Nop),
-        //         inputs!(PublicKey::from_secret_key(&script_private_key)),
-        //         script_private_key,
-        //     );
-        // }
-
         let mut stp = builder
-            .build::<Blake256>(&self.resources.factories, None, u64::MAX)
+            .build(&self.resources.factories, None, u64::MAX)
             .map_err(|e| OutputManagerError::BuildError(e.message))?;
-        // if let Some((spending_key, script_private_key)) = change_keys {
-        //     // let change_script_offset_public_key = stp.get_change_sender_offset_public_key()?.ok_or_else(|| {
-        //     //     OutputManagerError::BuildError(
-        //     //         "There should be a change script offset public key available".to_string(),
-        //     //     )
-        //     // })?;
-        //
-        //     let sender_offset_private_key = PrivateKey::random(&mut OsRng);
-        //     let sender_offset_public_key = PublicKey::from_secret_key(&sender_offset_private_key);
-        //
-        //     let public_offset_commitment_private_key = PrivateKey::random(&mut OsRng);
-        //     let public_offset_commitment_pub_key = PublicKey::from_secret_key(&public_offset_commitment_private_key);
-        //
-        //     let mut output_builder = UnblindedOutputBuilder::new(stp.get_change_amount()?, spending_key)
-        //         .with_script(script!(Nop))
-        //         .with_input_data(inputs!(PublicKey::from_secret_key(&script_private_key)))
-        //         .with_script_private_key(script_private_key);
-        //
-        //     output_builder.sign_as_receiver(sender_offset_public_key, public_offset_commitment_pub_key)?;
-        //     output_builder.sign_as_sender(&sender_offset_private_key)?;
-        //
-
-        //     let change_output =
-        //         DbUnblindedOutput::from_unblinded_output(output_builder.try_build()?, &self.resources.factories)?;
-        //
-        //     db_outputs.push(change_output);
-        // }
 
         if let Some(unblinded_output) = stp.get_change_unblinded_output()? {
             db_outputs.push(DbUnblindedOutput::rewindable_from_unblinded_output(
@@ -1175,6 +1218,7 @@ where
                 &self.resources.rewind_data,
                 None,
                 None,
+                OutputSource::default(),
             )?);
         }
         let tx_id = stp.get_tx_id()?;
@@ -1192,7 +1236,7 @@ where
         &mut self,
         tx_id: TxId,
         amount: MicroTari,
-        utxo_selection: UtxoSelectionCriteria,
+        selection_criteria: UtxoSelectionCriteria,
         output_features: OutputFeatures,
         fee_per_gram: MicroTari,
         lock_height: Option<u64>,
@@ -1211,7 +1255,7 @@ where
             );
 
         let input_selection = self
-            .select_utxos(amount, fee_per_gram, 1, metadata_byte_size, utxo_selection)
+            .select_utxos(amount, selection_criteria, fee_per_gram, 1, metadata_byte_size)
             .await?;
 
         let offset = PrivateKey::random(&mut OsRng);
@@ -1278,6 +1322,7 @@ where
             &self.resources.rewind_data,
             None,
             None,
+            OutputSource::default(),
         )?;
         builder
             .with_output(utxo.unblinded_output.clone(), sender_offset_private_key.clone())
@@ -1298,7 +1343,7 @@ where
 
         let factories = CryptoFactories::default();
         let mut stp = builder
-            .build::<Blake256>(
+            .build(
                 &self.resources.factories,
                 None,
                 self.last_seen_tip_height.unwrap_or(u64::MAX),
@@ -1317,6 +1362,7 @@ where
                 &self.resources.rewind_data,
                 None,
                 None,
+                OutputSource::default(),
             )?;
             outputs.push(change_output);
         }
@@ -1369,10 +1415,10 @@ where
     async fn select_utxos(
         &mut self,
         amount: MicroTari,
+        mut selection_criteria: UtxoSelectionCriteria,
         fee_per_gram: MicroTari,
         num_outputs: usize,
         total_output_metadata_byte_size: usize,
-        selection_criteria: UtxoSelectionCriteria,
     ) -> Result<UtxoSelection, OutputManagerError> {
         debug!(
             target: LOG_TARGET,
@@ -1391,12 +1437,17 @@ where
         // Attempt to get the chain tip height
         let chain_metadata = self.base_node_service.get_chain_metadata().await?;
 
+        // Respecting the setting to not choose outputs that reveal the address
+        if self.resources.config.autoignore_onesided_utxos {
+            selection_criteria.excluding_onesided = self.resources.config.autoignore_onesided_utxos;
+        }
+
         warn!(
             target: LOG_TARGET,
             "select_utxos selection criteria: {}", selection_criteria
         );
         let tip_height = chain_metadata.as_ref().map(|m| m.height_of_longest_chain());
-        let mut uo = self
+        let uo = self
             .resources
             .db
             .fetch_unspent_outputs_for_spending(&selection_criteria, amount, tip_height)?;
@@ -1416,29 +1467,6 @@ where
                 script![Nop].consensus_encode_exact_size(),
         );
 
-        if selection_criteria.filter.is_contract_output() {
-            let fee_with_change = fee_calc.calculate(
-                fee_per_gram,
-                1,
-                uo.len(),
-                num_outputs + 1,
-                total_output_metadata_byte_size + default_metadata_size,
-            );
-
-            // If the initial selection was not able to select enough UTXOs, fill in the difference with standard UTXOs
-            let total_utxo_value = uo.iter().map(|uo| uo.unblinded_output.value).sum::<MicroTari>();
-            if total_utxo_value < amount + fee_with_change {
-                let mut query = UtxoSelectionCriteria::smallest_first();
-                query.excluding = uo.iter().map(|o| o.commitment.clone()).collect();
-                let additional = self.resources.db.fetch_unspent_outputs_for_spending(
-                    &query,
-                    amount + fee_with_change - total_utxo_value,
-                    tip_height,
-                )?;
-                uo.extend(additional);
-            }
-        }
-
         trace!(target: LOG_TARGET, "We found {} UTXOs to select from", uo.len());
 
         let mut requires_change_output = false;
@@ -1448,7 +1476,7 @@ where
         for o in uo {
             utxos_total_value += o.unblinded_output.value;
 
-            error!(target: LOG_TARGET, "-- utxos_total_value = {:?}", utxos_total_value);
+            trace!(target: LOG_TARGET, "-- utxos_total_value = {:?}", utxos_total_value);
             utxos.push(o);
             // The assumption here is that the only output will be the payment output and change if required
             fee_without_change = fee_calc.calculate(
@@ -1469,7 +1497,7 @@ where
                 total_output_metadata_byte_size + default_metadata_size,
             );
 
-            error!(target: LOG_TARGET, "-- amt+fee = {:?} {}", amount, fee_with_change);
+            trace!(target: LOG_TARGET, "-- amt+fee = {:?} {}", amount, fee_with_change);
             if utxos_total_value > amount + fee_with_change {
                 requires_change_output = true;
                 break;
@@ -1644,10 +1672,10 @@ where
                 let selection = self
                     .select_utxos(
                         amount_per_split * MicroTari(number_of_splits as u64),
+                        UtxoSelectionCriteria::largest_first(),
                         fee_per_gram,
                         number_of_splits,
                         self.default_metadata_size() * number_of_splits,
-                        UtxoSelectionCriteria::largest_first(),
                     )
                     .await?;
 
@@ -1785,6 +1813,7 @@ where
                 &self.resources.rewind_data.clone(),
                 None,
                 None,
+                OutputSource::default(),
             )?;
 
             tx_builder
@@ -1795,7 +1824,7 @@ where
         }
 
         let mut stp = tx_builder
-            .build::<Blake256>(
+            .build(
                 &self.resources.factories,
                 None,
                 self.last_seen_tip_height.unwrap_or(u64::MAX),
@@ -2003,6 +2032,7 @@ where
                 &self.resources.rewind_data.clone(),
                 None,
                 None,
+                OutputSource::default(),
             )?;
 
             tx_builder
@@ -2027,7 +2057,7 @@ where
         }
 
         let mut stp = tx_builder
-            .build::<Blake256>(
+            .build(
                 &self.resources.factories,
                 None,
                 self.last_seen_tip_height.unwrap_or(u64::MAX),
@@ -2060,6 +2090,7 @@ where
                 &self.resources.rewind_data.clone(),
                 None,
                 None,
+                OutputSource::default(),
             )?);
         }
 
@@ -2208,6 +2239,7 @@ where
             &self.resources.rewind_data.clone(),
             None,
             None,
+            OutputSource::default(),
         )?;
 
         tx_builder
@@ -2215,7 +2247,7 @@ where
             .map_err(|e| OutputManagerError::BuildError(e.message))?;
 
         let mut stp = tx_builder
-            .build::<Blake256>(
+            .build(
                 &self.resources.factories,
                 None,
                 self.last_seen_tip_height.unwrap_or(u64::MAX),
@@ -2259,7 +2291,9 @@ where
         hashes: Vec<HashOutput>,
     ) -> Result<Vec<TransactionOutput>, OutputManagerError> {
         // lets get the output from the blockchain
-        let req = FetchMatchingUtxos { output_hashes: hashes };
+        let req = FetchMatchingUtxos {
+            output_hashes: hashes.iter().map(|v| v.to_vec()).collect(),
+        };
         let results: Vec<TransactionOutput> = self
             .resources
             .connectivity
@@ -2350,7 +2384,7 @@ where
 
                 let factories = CryptoFactories::default();
                 let mut stp = builder
-                    .build::<Blake256>(
+                    .build(
                         &self.resources.factories,
                         None,
                         self.last_seen_tip_height.unwrap_or(u64::MAX),
@@ -2370,6 +2404,7 @@ where
                     &self.resources.rewind_data,
                     None,
                     None,
+                    OutputSource::AtomicSwap,
                 )?;
                 outputs.push(change_output);
 
@@ -2437,7 +2472,7 @@ where
 
         let factories = CryptoFactories::default();
         let mut stp = builder
-            .build::<Blake256>(
+            .build(
                 &self.resources.factories,
                 None,
                 self.last_seen_tip_height.unwrap_or(u64::MAX),
@@ -2456,6 +2491,7 @@ where
             &self.resources.rewind_data,
             None,
             None,
+            OutputSource::Refund,
         )?;
         outputs.push(change_output);
 
@@ -2528,9 +2564,12 @@ where
                                 )
                                 .as_bytes(),
                             ) {
-                                Ok(spending_sk) => {
-                                    scanned_outputs.push((output.clone(), matched_key.private_key.clone(), spending_sk))
-                                },
+                                Ok(spending_sk) => scanned_outputs.push((
+                                    output.clone(),
+                                    OutputSource::OneSided,
+                                    matched_key.private_key.clone(),
+                                    spending_sk,
+                                )),
                                 Err(e) => {
                                     error!(
                                         target: LOG_TARGET,
@@ -2566,9 +2605,12 @@ where
                     match PrivateKey::from_bytes(
                         CommsPublicKey::shared_secret(&wallet_sk, &output.sender_offset_public_key).as_bytes(),
                     ) {
-                        Ok(spending_sk) => {
-                            scanned_outputs.push((output.clone(), wallet_sk.clone() + shared_secret, spending_sk))
-                        },
+                        Ok(spending_sk) => scanned_outputs.push((
+                            output.clone(),
+                            OutputSource::StealthOneSided,
+                            wallet_sk.clone() + shared_secret,
+                            spending_sk,
+                        )),
                         Err(e) => {
                             error!(
                                 target: LOG_TARGET,
@@ -2589,11 +2631,11 @@ where
     // Imports scanned outputs into the wallet
     fn import_onesided_outputs(
         &self,
-        scanned_outputs: Vec<(TransactionOutput, PrivateKey, RistrettoSecretKey)>,
+        scanned_outputs: Vec<(TransactionOutput, OutputSource, PrivateKey, RistrettoSecretKey)>,
     ) -> Result<Vec<RecoveredOutput>, OutputManagerError> {
         let mut rewound_outputs = Vec::with_capacity(scanned_outputs.len());
 
-        for (output, script_private_key, spending_sk) in scanned_outputs {
+        for (output, output_source, script_private_key, spending_sk) in scanned_outputs {
             let rewind_blinding_key = PrivateKey::from_bytes(&hash_secret_key(&spending_sk))?;
             let encryption_key = PrivateKey::from_bytes(&hash_secret_key(&rewind_blinding_key))?;
             let committed_value =
@@ -2633,6 +2675,7 @@ where
                         },
                         None,
                         Some(&output.proof),
+                        output_source,
                     )?;
 
                     let output_hex = output.commitment.to_hex();

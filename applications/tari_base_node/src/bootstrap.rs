@@ -78,7 +78,7 @@ impl<B> BaseNodeBootstrapper<'_, B>
 where B: BlockchainBackend + 'static
 {
     pub async fn bootstrap(self) -> Result<ServiceHandles, ExitError> {
-        let base_node_config = &self.app_config.base_node;
+        let mut base_node_config = self.app_config.base_node.clone();
         let mut p2p_config = self.app_config.base_node.p2p.clone();
         let peer_seeds = &self.app_config.peer_seeds;
 
@@ -94,6 +94,8 @@ where B: BlockchainBackend + 'static
             .map(|r| r.map(Peer::from).map(|p| p.node_id))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| ExitError::new(ExitCode::ConfigError, e))?;
+
+        base_node_config.state_machine.blockchain_sync_config.forced_sync_peers = sync_peers.clone();
 
         debug!(target: LOG_TARGET, "{} sync peer(s) configured", sync_peers.len());
 
@@ -188,6 +190,7 @@ where B: BlockchainBackend + 'static
         let base_node_service = handles.expect_handle::<LocalNodeCommsInterface>();
         let rpc_server = RpcServer::builder()
             .with_maximum_simultaneous_sessions(config.rpc_max_simultaneous_sessions)
+            .with_maximum_sessions_per_client(config.rpc_max_sessions_per_peer)
             .finish();
 
         // Add your RPC services here ‍🏴‍☠️️☮️🌊

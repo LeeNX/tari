@@ -20,10 +20,10 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-pub mod array;
 pub mod chain_metadata;
+pub mod dammsum;
 pub mod emoji;
-pub mod luhn;
+pub mod grpc_authentication;
 pub mod transaction;
 mod tx_id;
 pub mod types;

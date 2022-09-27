@@ -20,13 +20,8 @@
 //  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 //  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::{
-    convert::{TryFrom, TryInto},
-    fs,
-    path::PathBuf,
-};
+use std::convert::{TryFrom, TryInto};
 
-use clap::Parser;
 use futures::{
     channel::mpsc::{self, Sender},
     future,
@@ -48,13 +43,6 @@ use tari_app_grpc::{
         CoinSplitResponse,
         CreateBurnTransactionRequest,
         CreateBurnTransactionResponse,
-        CreateConstitutionDefinitionRequest,
-        CreateConstitutionDefinitionResponse,
-        CreateFollowOnAssetCheckpointRequest,
-        CreateFollowOnAssetCheckpointResponse,
-        CreateInitialAssetCheckpointRequest,
-        CreateInitialAssetCheckpointResponse,
-        FileDeletedResponse,
         GetBalanceRequest,
         GetBalanceResponse,
         GetCoinbaseRequest,
@@ -64,7 +52,6 @@ use tari_app_grpc::{
         GetConnectivityRequest,
         GetIdentityRequest,
         GetIdentityResponse,
-        GetOwnedAssetsResponse,
         GetTransactionInfoRequest,
         GetTransactionInfoResponse,
         GetUnspentAmountsResponse,
@@ -72,21 +59,12 @@ use tari_app_grpc::{
         GetVersionResponse,
         ImportUtxosRequest,
         ImportUtxosResponse,
-        MintTokensRequest,
-        MintTokensResponse,
-        RegisterAssetRequest,
-        RegisterAssetResponse,
         RevalidateRequest,
         RevalidateResponse,
-        SeedWordsResponse,
         SendShaAtomicSwapRequest,
         SendShaAtomicSwapResponse,
         SetBaseNodeRequest,
         SetBaseNodeResponse,
-        SubmitContractAcceptanceRequest,
-        SubmitContractAcceptanceResponse,
-        SubmitContractUpdateProposalAcceptanceRequest,
-        SubmitContractUpdateProposalAcceptanceResponse,
         TransactionDirection,
         TransactionEvent,
         TransactionEventRequest,
@@ -100,17 +78,17 @@ use tari_app_grpc::{
 };
 use tari_common_types::{
     transaction::TxId,
-    types::{BlockHash, FixedHash, PublicKey, Signature},
+    types::{BlockHash, PublicKey, Signature},
 };
 use tari_comms::{multiaddr::Multiaddr, types::CommsPublicKey, CommsNode};
 use tari_core::transactions::{
     tari_amount::MicroTari,
-    transaction_components::{OutputFeatures, SideChainFeatures, UnblindedOutput},
+    transaction_components::{OutputFeatures, UnblindedOutput},
 };
-use tari_utilities::{hex::Hex, ByteArray, Hashable};
+use tari_utilities::{hex::Hex, ByteArray};
 use tari_wallet::{
     connectivity_service::{OnlineStatus, WalletConnectivityInterface},
-    output_manager_service::handle::OutputManagerHandle,
+    output_manager_service::{handle::OutputManagerHandle, UtxoSelectionCriteria},
     transaction_service::{
         handle::TransactionServiceHandle,
         storage::models::{self, WalletTransaction},
@@ -121,7 +99,6 @@ use tokio::{sync::broadcast, task};
 use tonic::{Request, Response, Status};
 
 use crate::{
-    cli::Cli,
     grpc::{convert_to_transaction_event, TransactionWrapper},
     notifier::{CANCELLED, CONFIRMATION, MINED, NEW_BLOCK_MINED, QUEUED, RECEIVED, SENT},
 };
@@ -213,9 +190,9 @@ impl wallet_server::Wallet for WalletGrpcServer {
     async fn identify(&self, _: Request<GetIdentityRequest>) -> Result<Response<GetIdentityResponse>, Status> {
         let identity = self.wallet.comms.node_identity();
         Ok(Response::new(GetIdentityResponse {
-            public_key: identity.public_key().to_string().into_bytes(),
+            public_key: identity.public_key().to_vec(),
             public_address: identity.public_address().to_string(),
-            node_id: identity.node_id().to_string().into_bytes(),
+            node_id: identity.node_id().to_vec(),
         }))
     }
 
@@ -324,6 +301,7 @@ impl wallet_server::Wallet for WalletGrpcServer {
             .send_sha_atomic_swap_transaction(
                 address.clone(),
                 message.amount.into(),
+                UtxoSelectionCriteria::default(),
                 message.fee_per_gram.into(),
                 message.message,
             )
@@ -501,6 +479,7 @@ impl wallet_server::Wallet for WalletGrpcServer {
                             .send_transaction(
                                 pk,
                                 amount.into(),
+                                UtxoSelectionCriteria::default(),
                                 OutputFeatures::default(),
                                 fee_per_gram.into(),
                                 message,
@@ -511,6 +490,7 @@ impl wallet_server::Wallet for WalletGrpcServer {
                             .send_one_sided_transaction(
                                 pk,
                                 amount.into(),
+                                UtxoSelectionCriteria::default(),
                                 OutputFeatures::default(),
                                 fee_per_gram.into(),
                                 message,
@@ -521,6 +501,7 @@ impl wallet_server::Wallet for WalletGrpcServer {
                             .send_one_sided_to_stealth_address_transaction(
                                 pk,
                                 amount.into(),
+                                UtxoSelectionCriteria::default(),
                                 OutputFeatures::default(),
                                 fee_per_gram.into(),
                                 message,
@@ -569,7 +550,12 @@ impl wallet_server::Wallet for WalletGrpcServer {
         let mut transaction_service = self.get_transaction_service();
         debug!(target: LOG_TARGET, "Trying to burn {} Tari", message.amount);
         let response = match transaction_service
-            .burn_tari(message.amount.into(), message.fee_per_gram.into(), message.message)
+            .burn_tari(
+                message.amount.into(),
+                UtxoSelectionCriteria::default(),
+                message.fee_per_gram.into(),
+                message.message,
+            )
             .await
         {
             Ok(tx_id) => {
@@ -814,348 +800,6 @@ impl wallet_server::Wallet for WalletGrpcServer {
         Ok(Response::new(ImportUtxosResponse { tx_ids }))
     }
 
-    async fn submit_contract_acceptance(
-        &self,
-        request: Request<SubmitContractAcceptanceRequest>,
-    ) -> Result<Response<SubmitContractAcceptanceResponse>, Status> {
-        let mut asset_manager = self.wallet.asset_manager.clone();
-        let mut transaction_service = self.wallet.transaction_service.clone();
-        let message = request.into_inner();
-
-        let contract_id = FixedHash::try_from(message.contract_id)
-            .map_err(|err| Status::invalid_argument(format!("Invalid contract_id:{:?}", err)))?;
-
-        let validator_node_public_key =
-            PublicKey::from_bytes(message.validator_node_public_key.as_slice()).map_err(|e| {
-                Status::invalid_argument(format!("Validator node public key was not a valid pub key:{}", e))
-            })?;
-
-        let signature = message
-            .signature
-            .ok_or_else(|| Status::invalid_argument("signature not provided"))?;
-        let signature =
-            Signature::try_from(signature).map_err(|e| Status::invalid_argument(format!("Invalid signature:{}", e)))?;
-
-        let (tx_id, transaction) = asset_manager
-            .create_contract_acceptance(&contract_id, &validator_node_public_key, &signature)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let contract_id_hex = contract_id.to_hex();
-        let message = format!("Contract acceptance for contract with id={}", contract_id_hex);
-        transaction_service
-            .submit_transaction(tx_id, transaction, 0.into(), message)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(Response::new(SubmitContractAcceptanceResponse {
-            tx_id: tx_id.as_u64(),
-        }))
-    }
-
-    async fn submit_contract_update_proposal_acceptance(
-        &self,
-        request: Request<SubmitContractUpdateProposalAcceptanceRequest>,
-    ) -> Result<Response<SubmitContractUpdateProposalAcceptanceResponse>, Status> {
-        let mut asset_manager = self.wallet.asset_manager.clone();
-        let mut transaction_service = self.wallet.transaction_service.clone();
-        let message = request.into_inner();
-
-        let contract_id = FixedHash::try_from(message.contract_id)
-            .map_err(|err| Status::invalid_argument(format!("Invalid contract_id:{:?}", err)))?;
-
-        let validator_node_public_key =
-            PublicKey::from_bytes(message.validator_node_public_key.as_slice()).map_err(|e| {
-                Status::invalid_argument(format!("Validator node public key was not a valid pub key:{}", e))
-            })?;
-
-        let signature = message
-            .signature
-            .ok_or_else(|| Status::invalid_argument("signature not provided"))?;
-        let signature =
-            Signature::try_from(signature).map_err(|e| Status::invalid_argument(format!("Invalid signature:{}", e)))?;
-
-        let (tx_id, transaction) = asset_manager
-            .create_contract_update_proposal_acceptance(
-                &contract_id,
-                message.proposal_id,
-                &validator_node_public_key,
-                &signature,
-            )
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let contract_id_hex = contract_id.to_vec().to_hex();
-        let message = format!(
-            "Contract update proposal acceptance for contract_id={} and proposal_id={}",
-            contract_id_hex, message.proposal_id
-        );
-        transaction_service
-            .submit_transaction(tx_id, transaction, 0.into(), message)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(Response::new(SubmitContractUpdateProposalAcceptanceResponse {
-            tx_id: tx_id.as_u64(),
-        }))
-    }
-
-    async fn register_asset(
-        &self,
-        request: Request<RegisterAssetRequest>,
-    ) -> Result<Response<RegisterAssetResponse>, Status> {
-        let mut manager = self.wallet.asset_manager.clone();
-        let mut transaction_service = self.wallet.transaction_service.clone();
-        let message = request.into_inner();
-        let public_key = PublicKey::from_bytes(message.public_key.as_slice())
-            .map_err(|e| Status::invalid_argument(format!("Asset public key was not a valid pub key: {}", e)))?;
-        let (tx_id, transaction) = manager
-            .create_registration_transaction(
-                message.name,
-                public_key,
-                message.template_ids_implemented,
-                Some(message.description),
-                Some(message.image),
-                message.template_parameters.into_iter().map(|tp| tp.into()).collect(),
-            )
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-        let asset_public_key = transaction
-            .body
-            .outputs()
-            .iter()
-            .filter_map(|tx| match tx.features.asset.clone() {
-                Some(asset) => Some(asset.public_key),
-                None => None,
-            })
-            .next()
-            .unwrap();
-        let message = format!("Asset registration for {}", asset_public_key);
-        let _ = transaction_service
-            .submit_transaction(tx_id, transaction, 0.into(), message)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-        Ok(Response::new(RegisterAssetResponse {
-            public_key: Vec::from(asset_public_key.as_bytes()),
-        }))
-    }
-
-    async fn get_owned_assets(&self, _: Request<tari_rpc::Empty>) -> Result<Response<GetOwnedAssetsResponse>, Status> {
-        let mut asset_manager = self.wallet.asset_manager.clone();
-        let owned = asset_manager
-            .list_owned_assets()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let owned = owned
-            .into_iter()
-            .map(|asset| tari_rpc::Asset {
-                name: asset.name().to_string(),
-                registration_output_status: asset.registration_output_status().to_string(),
-                public_key: Vec::from(asset.public_key().as_bytes()),
-                owner_commitment: Vec::from(asset.owner_commitment().as_bytes()),
-                description: asset.description().to_string(),
-                image: asset.image().to_string(),
-            })
-            .collect();
-        Ok(Response::new(tari_rpc::GetOwnedAssetsResponse { assets: owned }))
-    }
-
-    async fn create_initial_asset_checkpoint(
-        &self,
-        request: Request<CreateInitialAssetCheckpointRequest>,
-    ) -> Result<Response<CreateInitialAssetCheckpointResponse>, Status> {
-        let mut asset_manager = self.wallet.asset_manager.clone();
-        let mut transaction_service = self.wallet.transaction_service.clone();
-        let message = request.into_inner();
-
-        let contract_id = message
-            .contract_id
-            .try_into()
-            .map_err(|e| Status::invalid_argument(format!("Asset public key was not a valid pub key:{}", e)))?;
-
-        let merkle_root = message
-            .merkle_root
-            .try_into()
-            .map_err(|_| Status::invalid_argument("Merkle root has an incorrect length"))?;
-
-        let committee_signatures = message
-            .committee_signatures
-            .map(TryInto::try_into)
-            .transpose()
-            .map_err(|_| Status::invalid_argument("Invalid committee signatures"))?
-            .unwrap_or_default();
-
-        let (tx_id, transaction) = asset_manager
-            .create_initial_asset_checkpoint(contract_id, merkle_root, committee_signatures)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let message = format!("Initial asset checkpoint for {}", contract_id);
-        let _ = transaction_service
-            .submit_transaction(tx_id, transaction, 0.into(), message)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(Response::new(CreateInitialAssetCheckpointResponse {}))
-    }
-
-    async fn create_follow_on_asset_checkpoint(
-        &self,
-        request: Request<CreateFollowOnAssetCheckpointRequest>,
-    ) -> Result<Response<CreateFollowOnAssetCheckpointResponse>, Status> {
-        let mut asset_manager = self.wallet.asset_manager.clone();
-        let mut transaction_service = self.wallet.transaction_service.clone();
-        let message = request.into_inner();
-
-        let contract_id = message
-            .contract_id
-            .try_into()
-            .map_err(|e| Status::invalid_argument(format!("Contract ID was not valid :{}", e)))?;
-
-        let checkpoint_number = message.checkpoint_number;
-
-        let merkle_root = message
-            .merkle_root
-            .try_into()
-            .map_err(|_| Status::invalid_argument("Incorrect merkle root length"))?;
-
-        let committee_signatures = message
-            .committee_signatures
-            .map(TryInto::try_into)
-            .transpose()
-            .map_err(|_| Status::invalid_argument("Invalid committee signatures"))?
-            .unwrap_or_default();
-
-        let (tx_id, transaction) = asset_manager
-            .create_follow_on_asset_checkpoint(contract_id, checkpoint_number, merkle_root, committee_signatures)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let message = format!("Checkpoint #{} for {}", checkpoint_number, contract_id);
-        transaction_service
-            .submit_transaction(tx_id, transaction, 10.into(), message)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(Response::new(CreateFollowOnAssetCheckpointResponse {}))
-    }
-
-    async fn create_constitution_definition(
-        &self,
-        request: Request<CreateConstitutionDefinitionRequest>,
-    ) -> Result<Response<CreateConstitutionDefinitionResponse>, Status> {
-        let mut asset_manager = self.wallet.asset_manager.clone();
-        let mut transaction_service = self.wallet.transaction_service.clone();
-        let message = request.into_inner();
-
-        let side_chain_features = SideChainFeatures::try_from(message).map_err(Status::internal)?;
-
-        let (tx_id, transaction) = asset_manager
-            .create_constitution_definition(&side_chain_features)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        debug!(
-            target: LOG_TARGET,
-            "Committee definition transaction: {:?}", transaction
-        );
-
-        let committee_size = side_chain_features
-            .constitution
-            .map(|con| con.validator_committee.members().len())
-            .unwrap_or(0);
-
-        let message = format!(
-            "Committee definition for {} members for {:?}",
-            committee_size, side_chain_features.contract_id,
-        );
-
-        let _ = transaction_service
-            .submit_transaction(tx_id, transaction, 0.into(), message)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(Response::new(CreateConstitutionDefinitionResponse {}))
-    }
-
-    async fn mint_tokens(&self, request: Request<MintTokensRequest>) -> Result<Response<MintTokensResponse>, Status> {
-        let mut asset_manager = self.wallet.asset_manager.clone();
-        let mut transaction_service = self.wallet.transaction_service.clone();
-        let message = request.into_inner();
-
-        let asset_public_key =
-            PublicKey::from_bytes(message.asset_public_key.as_slice()).map_err(|e| Status::internal(e.to_string()))?;
-        let asset = asset_manager
-            .get_owned_asset_by_pub_key(&asset_public_key)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let mut token_features = vec![];
-        for tari_rpc::MintTokenInfo { unique_id, features } in message.tokens {
-            let f: Option<OutputFeatures> = features
-                .map(|f| f.try_into())
-                .transpose()
-                .map_err(Status::invalid_argument)?;
-            token_features.push((unique_id, f));
-        }
-
-        let (tx_id, transaction) = asset_manager
-            .create_minting_transaction(&asset_public_key, asset.owner_commitment(), token_features)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        let owner_commitments: Vec<Vec<u8>> = transaction
-            .body
-            .outputs()
-            .iter()
-            .filter_map(|o| o.features.unique_id.as_ref().map(|_| o.commitment.to_vec()))
-            .collect();
-
-        let message = format!(
-            "Minting {} tokens for asset {}",
-            owner_commitments.len(),
-            asset_public_key
-        );
-        let _ = transaction_service
-            .submit_transaction(tx_id, transaction, 0.into(), message)
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(Response::new(MintTokensResponse { owner_commitments }))
-    }
-
-    async fn get_owned_tokens(
-        &self,
-        request: Request<tari_rpc::GetOwnedTokensRequest>,
-    ) -> Result<Response<tari_rpc::GetOwnedTokensResponse>, Status> {
-        let request = request.into_inner();
-        let request_public_key = PublicKey::from_bytes(&request.asset_public_key)
-            .map_err(|e| Status::invalid_argument(format!("asset_public key was not a valid public key: {}", e)))?;
-        let mut token_manager = self.wallet.token_manager.clone();
-        let owned = token_manager
-            .list_owned_tokens()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?;
-        let owned = owned
-            .into_iter()
-            .filter_map(|t| {
-                if t.asset_public_key() == &request_public_key {
-                    Some(tari_rpc::TokenUtxo {
-                        name: t.name().to_string(),
-                        output_status: t.output_status().to_string(),
-                        asset_public_key: Vec::from(t.asset_public_key().as_bytes()),
-                        unique_id: Vec::from(t.unique_id()),
-                        commitment: Vec::from(t.owner_commitment().as_bytes()),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect();
-        Ok(Response::new(tari_rpc::GetOwnedTokensResponse { tokens: owned }))
-    }
-
     async fn get_network_status(
         &self,
         _: Request<tari_rpc::Empty>,
@@ -1236,41 +880,6 @@ impl wallet_server::Wallet for WalletGrpcServer {
                 }))
             },
         }
-    }
-
-    /// Returns the contents of a seed words file, provided via CLI
-    async fn seed_words(&self, _: Request<tari_rpc::Empty>) -> Result<Response<SeedWordsResponse>, Status> {
-        let cli = Cli::parse();
-
-        let filepath: PathBuf = match cli.seed_words_file_name {
-            Some(filepath) => filepath,
-            None => return Err(Status::not_found("file path is empty")),
-        };
-
-        let words = fs::read_to_string(filepath)?
-            .split(' ')
-            .collect::<Vec<&str>>()
-            .iter()
-            .map(|&x| x.into())
-            .collect::<Vec<String>>();
-
-        Ok(Response::new(SeedWordsResponse { words }))
-    }
-
-    /// Deletes the seed words file, provided via CLI
-    async fn delete_seed_words_file(
-        &self,
-        _: Request<tari_rpc::Empty>,
-    ) -> Result<Response<FileDeletedResponse>, Status> {
-        let cli = Cli::parse();
-
-        // WARNING: the filepath used is supplied as an argument
-        fs::remove_file(match cli.seed_words_file_name {
-            Some(filepath) => filepath,
-            None => return Err(Status::not_found("file path is empty")),
-        })?;
-
-        Ok(Response::new(FileDeletedResponse {}))
     }
 }
 

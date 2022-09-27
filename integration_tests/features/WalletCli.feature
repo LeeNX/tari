@@ -53,6 +53,23 @@ Feature: Wallet CLI
         And mining node MINE mines 5 blocks
         Then I wait for wallet RECEIVER to have at least 1000000 uT
 
+    @critical
+    Scenario: As a user I want to burn tari via command line
+        Given I have a seed node SEED
+        And I have a base node BASE connected to seed SEED
+        And I have wallet WALLET connected to base node BASE
+        And I have mining node MINER connected to base node BASE and wallet WALLET
+        And mining node MINER mines 12 blocks
+        Then I mine 3 blocks on BASE
+        Then all nodes are at height 15
+        When I wait for wallet WALLET to have at least 221552530060 uT
+        When I create a burn transaction of 201552500000 uT from WALLET via command line
+        When I mine 5 blocks on BASE
+        Then all nodes are at height 20
+        # Then I wait for wallet WALLET to have at least 100 uT
+        Then I get balance of wallet WALLET is at most 18462621580 uT via command line
+        # TODO: verify the actual burned kernel
+        
     @long-running
     Scenario: As a user I want to send one-sided via command line
         Given I have a seed node SEED
@@ -139,69 +156,3 @@ Feature: Wallet CLI
         Given I have a base node BASE
         And I have wallet WALLET connected to base node BASE
         Then I run whois BASE on wallet WALLET via command line
-    
-    @dan @critical
-    Scenario: As a user I want to publish a contract definition via command line
-        Given I have a base node BASE
-        And I have wallet WALLET connected to base node BASE
-        And I have mining node MINE connected to base node BASE and wallet WALLET
-        And mining node MINE mines 4 blocks
-        Then I wait for wallet WALLET to have at least 1000000 uT
-        And I publish a contract definition DEF1 from file "fixtures/contract_definition.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 1 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        Then WALLET is connected to BASE
-
-    @dan @critical
-    Scenario: As a user I want to publish a contract constitution via command line
-        Given I have a base node BASE
-        And I have wallet WALLET connected to base node BASE
-        And I have mining node MINE connected to base node BASE and wallet WALLET
-        And mining node MINE mines 4 blocks
-        Then I wait for wallet WALLET to have at least 1000000 uT
-        And I publish a contract definition DEF1 from file "fixtures/contract_definition.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 1 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        And I publish a contract constitution from file "fixtures/contract_constitution.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 2 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        Then WALLET is connected to BASE
-
-    @dan @critical
-    Scenario: As a user I want to publish a contract update proposal via command line
-        Given I have a base node BASE
-        And I have wallet WALLET connected to base node BASE
-        And I have mining node MINE connected to base node BASE and wallet WALLET
-        And mining node MINE mines 4 blocks
-        Then I wait for wallet WALLET to have at least 1000000 uT
-        And I publish a contract definition DEF1 from file "fixtures/contract_definition.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 1 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        When I publish a contract constitution from file "fixtures/contract_constitution.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 2 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        And I publish a contract update proposal from file "fixtures/contract_update_proposal.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 3 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        Then WALLET is connected to BASE
-
-    @dan @critical
-    Scenario: As a user I want to publish a contract amendment via command line
-        Given I have a base node BASE
-        And I have wallet WALLET connected to base node BASE
-        And I have mining node MINE connected to base node BASE and wallet WALLET
-        And mining node MINE mines 4 blocks
-        Then I wait for wallet WALLET to have at least 1000000 uT
-        And I publish a contract definition DEF1 from file "fixtures/contract_definition.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 1 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        When I publish a contract constitution from file "fixtures/contract_constitution.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 2 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        And I publish a contract update proposal from file "fixtures/contract_update_proposal.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 3 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        And I publish a contract amendment from file "fixtures/contract_amendment.json" on wallet WALLET via command line
-        And mining node MINE mines 8 blocks
-        Then wallet WALLET has at least 4 transactions that are all TRANSACTION_STATUS_MINED_CONFIRMED and not cancelled
-        Then WALLET is connected to BASE
