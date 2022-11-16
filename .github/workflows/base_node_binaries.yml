@@ -90,7 +90,7 @@ jobs:
         id: vars
         shell: bash
         run: |
-          echo "VBRANCH=$(echo ${{ GITHUB_REF_NAME }})" >> $GITHUB_ENV
+          echo "VBRANCH=$(echo ${{ env.GITHUB_REF_NAME }})" >> $GITHUB_ENV
           echo "VSHA_SHORT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Default Destination Folder
