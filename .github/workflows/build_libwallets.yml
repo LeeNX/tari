@@ -93,18 +93,18 @@ jobs:
         with:
           path: libwallets
 
-      - name: Setup changelog
-        shell: bash
-        working-directory: libwallets
-        run: |
-          find . -name changelog.md -type f -exec cp -vf {} "$GITHUB_WORKSPACE/" \;
+#      - name: Setup changelog
+#        shell: bash
+#        working-directory: libwallets
+#        run: |
+#          find . -name changelog.md -type f -exec cp -vf {} "$GITHUB_WORKSPACE/" \;
 
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
           artifacts: "libwallet*/**/*"
           token: ${{ secrets.GITHUB_TOKEN }}
-          bodyFile: "changelog.md"
+          #bodyFile: "changelog.md"
           prerelease: true
           draft: true
           allowUpdates: true
