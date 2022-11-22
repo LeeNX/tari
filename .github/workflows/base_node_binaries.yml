@@ -430,6 +430,7 @@ jobs:
     steps:
       - name: Download binaries
         uses: actions/download-artifact@v3
+
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
@@ -441,4 +442,3 @@ jobs:
           allowUpdates: true
           updateOnlyUnreleased: true
           replacesArtifacts: true
-
