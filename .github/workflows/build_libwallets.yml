@@ -104,8 +104,10 @@ jobs:
         shell: bash
         working-directory: libwallets
         run: |
+          ls -alht
           find . -name "libtari_wallet_ffi.*.sha256sums" -type f \
-            -exec sed -i '' -e "s/libwallet-.*\///g" {} \;
+            -exec sed -i -e "s/libwallet-.*\///g" '{}' \;
+          ls -alht
 
       - name: Create release
         uses: ncipollo/release-action@v1
