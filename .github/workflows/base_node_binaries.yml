@@ -48,8 +48,9 @@ jobs:
           # matrix_selection=$( jq -c '.[] | select( ."name" == "windows-x64" )' ${{ env.matrix-json-file }} )
           #
           # buid select target images - build_enabled
-          matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
+          #matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
+          matrix_selection=$( jq -c '.[] | select( ."name" == "linux-arm64-rpi4" )' ${{ env.matrix-json-file }} )
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
           echo $matrix
@@ -185,6 +186,7 @@ jobs:
         env:
           RUSTFLAGS: "-C target_cpu=${{ matrix.builds.target_cpu }}"
           ROARING_ARCH: "${{ matrix.builds.target_cpu }}"
+          CFLAGS: "-mcpu=cortex-a72 -mfloat-abi=hard -mfpu=neon-fp-armv8 -mneon-for-64bits"
         with:
           use-cross: ${{ matrix.builds.cross }}
           command: build
