@@ -187,7 +187,8 @@ jobs:
         env:
           RUSTFLAGS: "-C target_cpu=${{ matrix.builds.target_cpu }}"
           ROARING_ARCH: "${{ matrix.builds.target_cpu }}"
-          CFLAGS: "-mcpu=cortex-a72 -mfloat-abi=hard -mfpu=neon-fp-armv8 -mneon-for-64bits"
+          #CFLAGS: "-mcpu=cortex-a72 -mfloat-abi=hard -mfpu=neon-fp-armv8 -mneon-for-64bits"
+          CFLAGS: "-march=armv8-a -mtune=cortex-a72"
         with:
           use-cross: ${{ matrix.builds.cross }}
           command: build
