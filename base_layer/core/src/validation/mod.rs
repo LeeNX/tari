@@ -33,26 +33,30 @@ pub use error::ValidationError;
 pub(crate) mod helpers;
 
 mod traits;
+
+#[cfg(feature = "base_node")]
 pub use traits::{
     BlockBodyValidator,
     CandidateBlockValidator,
     FinalHorizonStateValidation,
     HeaderChainLinkedValidator,
-    InternalConsistencyValidator,
-    TransactionValidator,
 };
+pub use traits::{InternalConsistencyValidator, TransactionValidator};
 
+#[cfg(feature = "base_node")]
 pub mod block_body;
+#[cfg(feature = "base_node")]
 mod difficulty_calculator;
+#[cfg(feature = "base_node")]
 pub use difficulty_calculator::*;
+#[cfg(feature = "base_node")]
 pub mod mocks;
 pub mod transaction;
-// pub mod header_validator;
 
 mod chain_balance;
 pub use chain_balance::ChainBalanceValidator;
-
 pub mod aggregate_body;
+#[cfg(feature = "base_node")]
 pub mod header;
 
 #[cfg(test)]

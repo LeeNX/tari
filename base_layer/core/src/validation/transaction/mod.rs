@@ -20,7 +20,9 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#[cfg(feature = "transactions")]
 mod transaction_internal_validator;
+#[cfg(feature = "transactions")]
 pub use transaction_internal_validator::TransactionInternalConsistencyValidator;
 
 mod transaction_chain_validator;

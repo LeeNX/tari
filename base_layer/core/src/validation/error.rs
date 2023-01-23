@@ -25,11 +25,14 @@ use tari_crypto::errors::RangeProofError;
 use thiserror::Error;
 use tokio::task;
 
+#[cfg(feature = "base_node")]
 use crate::{
     blocks::{BlockHeaderValidationError, BlockValidationError},
     chain_storage::ChainStorageError,
-    covenants::CovenantError,
     proof_of_work::{monero_rx::MergeMineError, PowError},
+};
+use crate::{
+    covenants::CovenantError,
     transactions::{
         tari_amount::MicroTari,
         transaction_components::{OutputType, TransactionError},

@@ -20,8 +20,7 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use tari_common_types::chain_metadata::ChainMetadata;
-use tari_common_types::types::HashOutput;
+use tari_common_types::{chain_metadata::ChainMetadata, types::HashOutput};
 
 use crate::{
     consensus::ConsensusManager,
@@ -77,7 +76,6 @@ impl TransactionInternalConsistencyValidator {
         // We can call this function with a constant value, because we've just shown that this is NOT a coinbase, and
         // only coinbases may have the extra field set (the only field that the fn argument affects).
         tx.body.check_output_features(1)?;
-
 
         self.aggregate_body_validator.validate(
             &tx.body,

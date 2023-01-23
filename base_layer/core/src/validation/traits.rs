@@ -23,13 +23,13 @@
 use tari_common_types::{chain_metadata::ChainMetadata, types::Commitment};
 use tari_utilities::epoch_time::EpochTime;
 
+#[cfg(feature = "base_node")]
 use crate::{
     blocks::{Block, BlockHeader, ChainBlock},
     chain_storage::BlockchainBackend,
     proof_of_work::{AchievedTargetDifficulty, Difficulty},
-    transactions::transaction_components::Transaction,
-    validation::error::ValidationError,
 };
+use crate::{transactions::transaction_components::Transaction, validation::error::ValidationError};
 
 /// A validator that determines if a block body is valid, assuming that the header has already been
 /// validated
