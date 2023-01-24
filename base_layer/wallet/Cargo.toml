@@ -14,7 +14,7 @@ tari_comms = { version = "^0.44", path = "../../comms/core" }
 tari_comms_dht = { version = "^0.44", path = "../../comms/dht" }
 tari_crypto = { git = "https://github.com/tari-project/tari-crypto.git", tag = "v0.16.6" }
 tari_key_manager = { version = "^0.44", path = "../key_manager" }
-tari_p2p = { version = "^0.44", path = "../p2p", features = ["auto-update"] }
+tari_p2p = { version = "^0.44", path = "../p2p"}
 tari_script = { path = "../../infrastructure/tari_script" }
 tari_service_framework = { version = "^0.44", path = "../service_framework" }
 tari_shutdown = { version = "^0.44", path = "../../infrastructure/shutdown" }
@@ -71,3 +71,4 @@ default=["bundled_sqlite"]
 c_integration = []
 avx2 = ["tari_crypto/simd_backend", "tari_core/avx2"]
 bundled_sqlite = ["libsqlite3-sys"]
+auto-update =  ["tari_p2p/auto-update"]

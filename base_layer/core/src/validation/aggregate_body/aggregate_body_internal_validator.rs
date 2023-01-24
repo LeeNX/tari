@@ -109,7 +109,7 @@ impl AggregateBodyInternalConsistencyValidator {
     ) -> Result<(), ValidationError> {
         let total_reward = total_reward.unwrap_or(MicroTari::zero());
 
-        // old internal validatior
+        // old internal validator
         verify_kernel_signatures(body)?;
 
         check_script_size(
