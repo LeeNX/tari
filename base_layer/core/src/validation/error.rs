@@ -42,11 +42,15 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum ValidationError {
     #[error("Block header validation failed: {0}")]
+    #[cfg(feature = "base_node")]
     BlockHeaderError(#[from] BlockHeaderValidationError),
     #[error("Block validation error: {0}")]
+    #[cfg(feature = "base_node")]
     BlockError(#[from] BlockValidationError),
     #[error("Contains kernels or inputs that are not yet spendable")]
     MaturityError,
+    #[error("The block weight ({actual_weight}) is above the maximum ({max_weight})")]
+    BlockTooLarge { actual_weight: u64, max_weight: u64 },
     #[error("Contains {} unknown inputs", .0.len())]
     UnknownInputs(Vec<HashOutput>),
     #[error("Contains an unknown input")]
@@ -81,6 +85,7 @@ pub enum ValidationError {
     #[error("Final state validation failed: The UTXO set did not balance with the expected emission at height {0}")]
     ChainBalanceValidationFailed(u64),
     #[error("Proof of work error: {0}")]
+    #[cfg(feature = "base_node")]
     ProofOfWorkError(#[from] PowError),
     #[error("Attempted to validate genesis block")]
     ValidatingGenesis,
@@ -93,6 +98,7 @@ pub enum ValidationError {
     #[error("Duplicate or unsorted kernel found in block body")]
     UnsortedOrDuplicateKernel,
     #[error("Error in merge mine data:{0}")]
+    #[cfg(feature = "base_node")]
     MergeMineError(#[from] MergeMineError),
     #[error("Contains an input with an invalid mined-height in body")]
     InvalidMinedHeight,
@@ -154,6 +160,7 @@ pub enum ValidationError {
 
 // ChainStorageError has a ValidationError variant, so to prevent a cyclic dependency we use a string representation in
 // for storage errors that cause validation failures.
+#[cfg(feature = "base_node")]
 impl From<ChainStorageError> for ValidationError {
     fn from(err: ChainStorageError) -> Self {
         Self::FatalStorageError(err.to_string())

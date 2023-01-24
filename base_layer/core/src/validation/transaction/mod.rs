@@ -24,9 +24,11 @@
 mod transaction_internal_validator;
 #[cfg(feature = "transactions")]
 pub use transaction_internal_validator::TransactionInternalConsistencyValidator;
-
+#[cfg(feature = "base_node")]
 mod transaction_chain_validator;
+#[cfg(feature = "base_node")]
 pub use transaction_chain_validator::TransactionChainLinkedValidator;
-
+#[cfg(feature = "base_node")]
 mod transaction_full_validator;
+#[cfg(feature = "base_node")]
 pub use transaction_full_validator::TransactionFullValidator;

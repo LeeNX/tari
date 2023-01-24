@@ -40,7 +40,6 @@ use tari_common_types::types::{Commitment, PrivateKey, PublicKey, Signature};
 use tari_comms_dht::domain_message::OutboundDomainMessage;
 use tari_core::{
     base_node::state_machine_service::states::{ListeningInfo, StateInfo, StatusInfo},
-    blocks::BlockValidationError,
     consensus::{ConsensusConstantsBuilder, ConsensusManager, NetworkConsensus},
     mempool::{Mempool, MempoolConfig, MempoolServiceConfig, TxStorageResponse},
     proof_of_work::Difficulty,
@@ -1024,7 +1023,7 @@ async fn consensus_validation_large_tx() {
     let err = validator.validate(&tx, None, None, u64::MAX).unwrap_err();
     assert!(matches!(
         err,
-        ValidationError::BlockError(BlockValidationError::BlockTooLarge { .. })
+        ValidationError::BlockTooLarge { .. }
     ));
 
     let weighting = constants.transaction_weight();
