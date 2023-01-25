@@ -190,12 +190,19 @@ jobs:
         shell: bash
         working-directory: libwallets
         run: |
+          ls -alht
           mkdir libwallet-ios-universal
-          lipo -create libtari_wallet_ffi.iso_x86_64.a libtari_wallet_ffi.iso_aarch64.a \
-            -output libwallet-ios-universal/libtari_wallet_ffi.ios_universal.a
-
+          cp -v "libwallet-ios-x86_64/libtari_wallet_ffi.h" \
+            libwallet-ios-universal/
+          cp -v "libwallet-ios-x86_64/changelog.md" \
+            libwallet-ios-universal/
+          lipo -create \
+            "libwallet-ios-x86_64/libtari_wallet_ffi.iso_x86_64.a" \
+            "libwallet-ios-aarch64/libtari_wallet_ffi.iso_aarch64.a" \
+              -output "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.a"
           shasum -a 256 \
             "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.a" \
+            "libwallet-ios-universal/libtari_wallet_ffi.h" \
               > "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.sha256sums"
           ls -alht
 
