@@ -157,3 +157,47 @@ jobs:
         with:
           name: libwallet-ios-${{ env.target_platform }}
           path: ${{ runner.temp }}/libwallet-ios-${{ env.target_platform }}
+
+  ios_assemble_universal:
+    name: Assemble iOS universal
+    if: ${{ inputs.build_ios == 'true' }}
+    needs: ios_build
+
+    strategy:
+      fail-fast: false
+
+    runs-on: macos-latest
+
+    steps:
+      - name: Download iOS libwallets
+        uses: actions/download-artifact@v3
+        with:
+          path: libwallets
+
+      - name: Verify checksums
+        shell: bash
+        working-directory: libwallets
+        run: |
+          ls -alhtR
+          find . -name "*.sha256sums" -type f -print | xargs cat >> libwallets.txt.sha256sums-verify
+          cat libwallets.txt.sha256sums-verify
+          sha256sum -c libwallets.txt.sha256sums-verify
+
+      - name: Assemble iOS universal libwallet
+        shell: bash
+        working-directory: libwallets
+        run: |
+          mkdir libwallet-ios-universal
+          lipo -create libtari_wallet_ffi.iso_x86_64.a libtari_wallet_ffi.iso_aarch64.a \
+            -output libwallet-ios-universal/libtari_wallet_ffi.ios_universal.a
+
+          shasum -a 256 \
+            "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.a" \
+              > "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.sha256sums"
+          ls -alht
+
+      - name: Upload iOS universal libwallet artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: libwallet-ios-universal
+          path: libwallets/libwallet-ios-universal
