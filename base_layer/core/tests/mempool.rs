@@ -1021,10 +1021,7 @@ async fn consensus_validation_large_tx() {
     let factories = CryptoFactories::default();
     let validator = TransactionInternalConsistencyValidator::new(true, consensus_manager.clone(), factories);
     let err = validator.validate(&tx, None, None, u64::MAX).unwrap_err();
-    assert!(matches!(
-        err,
-        ValidationError::BlockTooLarge { .. }
-    ));
+    assert!(matches!(err, ValidationError::BlockTooLarge { .. }));
 
     let weighting = constants.transaction_weight();
     let weight = tx.calculate_weight(weighting);

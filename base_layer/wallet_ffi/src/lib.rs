@@ -114,7 +114,6 @@ use tari_crypto::{
 };
 use tari_key_manager::{cipher_seed::CipherSeed, mnemonic::MnemonicLanguage, SeedWords};
 use tari_p2p::{
-    auto_update::AutoUpdateConfig,
     transport::MemoryTransportConfig,
     Network,
     PeerSeedsConfig,
@@ -5327,13 +5326,11 @@ pub unsafe extern "C" fn wallet_create(
         ..Default::default()
     };
 
-    let auto_update = AutoUpdateConfig::default();
     let consensus_manager = ConsensusManager::builder(network).build();
 
     let w = runtime.block_on(Wallet::start(
         wallet_config,
         peer_seeds,
-        auto_update,
         node_identity,
         consensus_manager,
         factories,
