@@ -23,7 +23,6 @@
 use std::{cmp, marker::PhantomData, sync::Arc};
 
 use log::*;
-#[cfg(feature = "auto-update")]
 use tari_common::configuration::bootstrap::ApplicationType;
 use tari_common_types::{
     tari_address::TariAddress,
@@ -60,9 +59,8 @@ use tari_key_manager::{
     mnemonic::{Mnemonic, MnemonicLanguage},
     SeedWords,
 };
-#[cfg(feature = "auto-update")]
-use tari_p2p::auto_update::{AutoUpdateConfig, SoftwareUpdaterHandle, SoftwareUpdaterService};
 use tari_p2p::{
+    auto_update::{AutoUpdateConfig, SoftwareUpdaterHandle, SoftwareUpdaterService},
     comms_connector::pubsub_connector,
     initialization,
     initialization::P2pInitializer,
@@ -120,7 +118,6 @@ pub struct Wallet<T, U, V, W, X> {
     pub contacts_service: ContactsServiceHandle,
     pub base_node_service: BaseNodeServiceHandle,
     pub utxo_scanner_service: UtxoScannerHandle,
-    #[cfg(feature = "auto-update")]
     pub updater_service: Option<SoftwareUpdaterHandle>,
     pub db: WalletDatabase<T>,
     pub output_db: OutputManagerDatabase<V>,
@@ -142,7 +139,7 @@ where
     pub async fn start(
         config: WalletConfig,
         peer_seeds: PeerSeedsConfig,
-        #[cfg(feature = "auto-update")] auto_update: AutoUpdateConfig,
+        auto_update: AutoUpdateConfig,
         node_identity: Arc<NodeIdentity>,
         consensus_manager: ConsensusManager,
         factories: CryptoFactories,
@@ -225,7 +222,6 @@ where
             ));
 
         // Check if we have update config. FFI wallets don't do this, the update on mobile is done differently.
-        #[cfg(feature = "auto-update")]
         let stack = if auto_update.is_update_enabled() {
             stack.add_initializer(SoftwareUpdaterService::new(
                 ApplicationType::ConsoleWallet,
@@ -256,7 +252,6 @@ where
         let base_node_service_handle = handles.expect_handle::<BaseNodeServiceHandle>();
         let utxo_scanner_service_handle = handles.expect_handle::<UtxoScannerHandle>();
         let wallet_connectivity = handles.expect_handle::<WalletConnectivityHandle>();
-        #[cfg(feature = "auto-update")]
         let updater_handle = if auto_update.is_update_enabled() {
             Some(handles.expect_handle::<SoftwareUpdaterHandle>())
         } else {
@@ -290,7 +285,6 @@ where
             contacts_service: contacts_handle,
             base_node_service: base_node_service_handle,
             utxo_scanner_service: utxo_scanner_service_handle,
-            #[cfg(feature = "auto-update")]
             updater_service: updater_handle,
             wallet_connectivity,
             db: wallet_database,
@@ -371,7 +365,6 @@ where
         self.wallet_connectivity.get_current_base_node_peer()
     }
 
-    #[cfg(feature = "auto-update")]
     pub async fn check_for_update(&self) -> Option<String> {
         let mut updater = self.updater_service.clone().unwrap();
         debug!(
@@ -404,7 +397,6 @@ where
         }
     }
 
-    #[cfg(feature = "auto-update")]
     pub fn get_software_updater(&self) -> Option<SoftwareUpdaterHandle> {
         self.updater_service.as_ref().cloned()
     }
