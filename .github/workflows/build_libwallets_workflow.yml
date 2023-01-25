@@ -117,7 +117,7 @@ jobs:
           override: true
 
       - name: Install macOS dependencies
-        run: brew install cmake
+        run: brew install cmake coreutils
 
       - name: Cache cargo files and outputs
         uses: Swatinem/rust-cache@v2
@@ -169,6 +169,9 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      - name: Install macOS dependencies
+        run: brew install coreutils
+
       - name: Download iOS libwallets
         uses: actions/download-artifact@v3
         with:
