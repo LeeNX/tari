@@ -5969,6 +5969,7 @@ dependencies = [
  "log",
  "log4rs",
  "num-traits",
+ "openssl",
  "rand 0.7.3",
  "serde_json",
  "tari_common",
