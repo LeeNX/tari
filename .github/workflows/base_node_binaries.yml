@@ -148,7 +148,7 @@ jobs:
         run: brew install cmake coreutils automake autoconf
 
       - name: Install Windows dependencies
-        #continue-on-error: true  # WARNING: workaround
+        # continue-on-error: true  # WARNING: workaround
         if: startsWith(runner.os,'Windows')
         run: |
           vcpkg.exe install sqlite3:x64-windows zlib:x64-windows
@@ -181,6 +181,13 @@ jobs:
         run: |
           echo "PLATFORM_SPECIFIC_DIR=osx" >> $GITHUB_ENV
           echo "LIB_EXT=.dylib" >> $GITHUB_ENV
+
+      - name: Set environment variables - macOS - ARM64
+        if: ${{ startsWith(runner.os,'macOS') && matrix.builds.name == 'macos-arm64' }}
+        run: |
+          xcrun --show-sdk-path
+          ls -la "/Library/Developer/CommandLineTools/SDKs/"
+          echo "RANDOMX_RS_CMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.3.sdk" >> $GITHUB_ENV
 
       - name: Set environment variables - Ubuntu
         if: startsWith(runner.os,'Linux')
