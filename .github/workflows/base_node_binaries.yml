@@ -388,7 +388,7 @@ jobs:
           name: ${{ env.TBN_FILENAME }}_archive-${{ matrix.builds.name }}
           path: "${{ github.workspace }}${{ env.TBN_DIST }}/${{ env.BINFILE }}.zip*"
 
-      - name: Prep miner for upload
+      - name: Prep Miner for upload
         shell: bash
         run: |
           cd "${{ github.workspace }}${{ env.TBN_DIST }}"
@@ -402,6 +402,23 @@ jobs:
         with:
           name: tari_miner-${{ matrix.builds.name }}
           path: "${{ github.workspace }}${{ env.TBN_DIST }}/tari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}*"
+
+      - name: Prep diag-utils for upload
+        shell: bash
+        run: |
+          mkdir "${{ github.workspace }}${{ env.TBN_DIST }}/diag-utils"
+          cd "${{ github.workspace }}${{ env.TBN_DIST }}/diag-utils"
+          # Find RandomX built tools for testing
+          find "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/" \
+            -name "randomx-*${{ env.TBN_EXT}}" -type f -perm -+x -exec cp -v {} . \;
+          ${SHARUN} "*" \
+            >> "${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}.sha256"
+
+      - name: Artifact upload for diag-utils
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}
+          path: "${{ github.workspace }}${{ env.TBN_DIST }}/diag-utils/*"
 
       - name: Sync dist to S3 - Bash
         continue-on-error: true # Don't break if s3 upload fails

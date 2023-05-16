@@ -2842,9 +2842,9 @@ checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
 
 [[package]]
 name = "libm"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
+checksum = "f7012b1bbb0719e1097c47611d3898568c546d597c2e74d66f6087edd5233ff4"
 
 [[package]]
 name = "libsqlite3-sys"
@@ -3323,7 +3323,7 @@ checksum = "2399c9463abc5f909349d8aa9ba080e0b88b3ce2885389b60b993f39b1a56905"
 dependencies = [
  "byteorder",
  "lazy_static",
- "libm 0.2.6",
+ "libm 0.2.7",
  "num-integer",
  "num-iter",
  "num-traits",
@@ -3393,7 +3393,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
- "libm 0.2.6",
+ "libm 0.2.7",
 ]
 
 [[package]]
@@ -6199,9 +6199,9 @@ dependencies = [
 
 [[package]]
 name = "thread-id"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fdfe0627923f7411a43ec9ec9c39c3a9b4151be313e0922042581fb6c9b717f"
+checksum = "3ee93aa2b8331c0fec9091548843f2c90019571814057da3b783f9de09349d73"
 dependencies = [
  "libc",
  "redox_syscall 0.2.16",
@@ -7366,4 +7366,4 @@ dependencies = [
 [[patch.unused]]
 name = "randomx-rs"
 version = "1.1.14"
-source = "git+https://github.com/tari-project/randomx-rs?rev=7f3748b#7f3748bd14e20358003cda01f419f38c1e0d42f5"
+source = "git+https://github.com/leet4tari/randomx-rs.git?branch=leet-target-osx-sysroot#e4eabc1b22eb9dbc70ca80ec6efe5d8d71ebfd03"
