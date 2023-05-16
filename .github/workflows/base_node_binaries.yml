@@ -412,7 +412,7 @@ jobs:
           # Find RandomX built tools for testing
           find "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/" \
             -name "randomx-*${{ env.TBN_EXT}}" -type f -perm -+x -exec cp -v {} . \;
-          ${SHARUN} "*" \
+          ${SHARUN} * \
             >> "${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}.sha256"
 
       - name: Artifact upload for diag-utils
