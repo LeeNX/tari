@@ -220,7 +220,8 @@ jobs:
           mkdir libwallet-ios-universal
           cp -v "libwallet-ios-x86_64/libtari_wallet_ffi.h" \
             libwallet-ios-universal/
-          if [ -f "libwallet-ios-x86_64/changelog-*.md" ]; then
+          echo "Check for changelog"
+          if [ -f libwallet-ios-x86_64/changelog-*.md ]; then
             echo "Changelog found"
             envChangelogFull=$(ls libwallet-ios-x86_64/changelog-*.md)
             echo ${envChangelogFull}
@@ -233,6 +234,8 @@ jobs:
             cp -v "libwallet-ios-x86_64/changelog-${TARI_NETWORK_CHANGELOG}.md" libwallet-ios-universal/
             TARI_NETWORK_CHANGELOG_FILE=libwallet-ios-universal/changelog-${TARI_NETWORK_CHANGELOG}.md
             echo ${TARI_NETWORK_CHANGELOG_FILE}
+          else
+            echo "No changelog found"
           fi
           lipo -create \
             "libwallet-ios-x86_64/libtari_wallet_ffi.ios_x86_64.a" \
