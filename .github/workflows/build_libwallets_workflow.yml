@@ -242,10 +242,11 @@ jobs:
             "libwallet-ios-aarch64/libtari_wallet_ffi.ios_aarch64.a" \
               -output "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.a"
           shasum -a 256 \
+            "${TARI_NETWORK_CHANGELOG_FILE}" \
             "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.a" \
-            "libwallet-ios-universal/libtari_wallet_ffi.h" "${TARI_NETWORK_CHANGELOG_FILE}" \
+            "libwallet-ios-universal/libtari_wallet_ffi.h" \
               > "libwallet-ios-universal/libtari_wallet_ffi.ios_universal.sha256sums"
-          ls -alht
+          ls -alhtR
 
       - name: Upload iOS universal libwallet artifacts
         uses: actions/upload-artifact@v3
@@ -257,17 +258,29 @@ jobs:
         shell: bash
         working-directory: libwallets
         run: |
-          ls -alht
+          ls -alhtR
           mkdir libwallet-ios-universal-sim
           lipo -create \
             "libwallet-ios-x86_64/libtari_wallet_ffi.ios_x86_64.a" \
             "libwallet-ios-aarch64-sim/libtari_wallet_ffi.ios_aarch64-sim.a" \
               -output "libwallet-ios-universal-sim/libtari_wallet_ffi.ios_universal-sim.a"
           mkdir libwallet-ios-xcframework
-          if [ -f "libwallet-ios-x86_64/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" ]; then
-            cp -v "libwallet-ios-x86_64/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" libwallet-ios-xcframework/
-            TARI_NETWORK_CHANGELOG_FILE=libwallet-ios-xcframework/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md
+          echo "Check for changelog"
+          if [ -f libwallet-ios-x86_64/changelog-*.md ]; then
+            echo "Changelog found"
+            envChangelogFull=$(ls libwallet-ios-x86_64/changelog-*.md)
+            echo ${envChangelogFull}
+            # Strip suffix
+            envChangelog=${envChangelogFull::-3}
+            echo ${envChangelog}
+            # Strip prefix
+            TARI_NETWORK_CHANGELOG=${envChangelog##*/changelog-}
+            echo ${TARI_NETWORK_CHANGELOG}
+            cp -v "libwallet-ios-x86_64/changelog-${TARI_NETWORK_CHANGELOG}.md" libwallet-ios-xcframework/
+            TARI_NETWORK_CHANGELOG_FILE=libwallet-ios-xcframework/changelog-${TARI_NETWORK_CHANGELOG}.md
             echo ${TARI_NETWORK_CHANGELOG_FILE}
+          else
+            echo "No changelog found"
           fi
           xcodebuild -create-xcframework \
             -library "libwallet-ios-universal-sim/libtari_wallet_ffi.ios_universal-sim.a" \
@@ -283,7 +296,7 @@ jobs:
             "libwallet-ios-xcframework/libtari_wallet_ffi_ios.xcframework/ios-arm64_x86_64-simulator/Headers" \
             "libwallet-ios-xcframework/libtari_wallet_ffi_ios.xcframework/ios-arm64_x86_64-simulator/libtari_wallet_ffi.ios_universal-sim.a" \
               > "libwallet-ios-xcframework/libtari_wallet_ffi.ios_xcframework.sha256sums"
-          ls -alht
+          ls -alhtR
 
       - name: Upload iOS xcframework libwallet artifacts
         uses: actions/upload-artifact@v3
