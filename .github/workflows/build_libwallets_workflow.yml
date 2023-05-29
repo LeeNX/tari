@@ -103,8 +103,6 @@ jobs:
   ios_build:
     name: Build iOS
     if: ${{ inputs.build_ios == 'true' }}
-    outputs:
-      TARI_NETWORK_CHANGELOG: ${{ steps.ios_build.outputs.TARI_NETWORK_CHANGELOG }}
     strategy:
       fail-fast: false
       matrix:
@@ -190,8 +188,6 @@ jobs:
     name: Assemble iOS universal
     if: ${{ inputs.build_ios == 'true' }}
     needs: ios_build
-    env:
-      TARI_NETWORK_CHANGELOG: ${{ needs.ios_build.outputs.TARI_NETWORK_CHANGELOG }}
 
     strategy:
       fail-fast: false
@@ -224,9 +220,18 @@ jobs:
           mkdir libwallet-ios-universal
           cp -v "libwallet-ios-x86_64/libtari_wallet_ffi.h" \
             libwallet-ios-universal/
-          if [ -f "libwallet-ios-x86_64/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" ]; then
-            cp -v "libwallet-ios-x86_64/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" libwallet-ios-universal/
-            TARI_NETWORK_CHANGELOG_FILE=libwallet-ios-universal/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md
+          if [ -f "libwallet-ios-x86_64/changelog-*.md" ]; then
+            echo "Changelog found"
+            envChangelogFull=$(ls libwallet-ios-x86_64/changelog-*.md)
+            echo ${envChangelogFull}
+            # Strip suffix
+            envChangelog=${envChangelogFull::-3}
+            echo ${envChangelog}
+            # Strip prefix
+            TARI_NETWORK_CHANGELOG=${envChangelog##*/changelog-}
+            echo ${TARI_NETWORK_CHANGELOG}
+            cp -v "libwallet-ios-x86_64/changelog-${TARI_NETWORK_CHANGELOG}.md" libwallet-ios-universal/
+            TARI_NETWORK_CHANGELOG_FILE=libwallet-ios-universal/changelog-${TARI_NETWORK_CHANGELOG}.md
             echo ${TARI_NETWORK_CHANGELOG_FILE}
           fi
           lipo -create \
