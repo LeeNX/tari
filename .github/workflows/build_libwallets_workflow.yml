@@ -103,6 +103,8 @@ jobs:
   ios_build:
     name: Build iOS
     if: ${{ inputs.build_ios == 'true' }}
+    outputs:
+      TARI_NETWORK_CHANGELOG: ${{ steps.ios_build.outputs.TARI_NETWORK_CHANGELOG }}
     strategy:
       fail-fast: false
       matrix:
@@ -188,6 +190,9 @@ jobs:
     name: Assemble iOS universal
     if: ${{ inputs.build_ios == 'true' }}
     needs: ios_build
+    env:
+      TARI_NETWORK_CHANGELOG: ${{ needs.ios_build.outputs.TARI_NETWORK_CHANGELOG }}
+
     strategy:
       fail-fast: false
 
@@ -215,7 +220,7 @@ jobs:
         shell: bash
         working-directory: libwallets
         run: |
-          ls -alht
+          ls -alhtR
           mkdir libwallet-ios-universal
           cp -v "libwallet-ios-x86_64/libtari_wallet_ffi.h" \
             libwallet-ios-universal/
