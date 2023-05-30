@@ -226,7 +226,8 @@ jobs:
             envChangelogFull=$(ls libwallet-ios-x86_64/changelog-*.md)
             echo ${envChangelogFull}
             # Strip suffix
-            envChangelog=${envChangelogFull::-3}
+            #envChangelog=${envChangelogFull::-3}
+            envChangelog=${envChangelogFull:0:${#envChangelogFull}-3}
             echo ${envChangelog}
             # Strip prefix
             TARI_NETWORK_CHANGELOG=${envChangelog##*/changelog-}
@@ -271,7 +272,8 @@ jobs:
             envChangelogFull=$(ls libwallet-ios-x86_64/changelog-*.md)
             echo ${envChangelogFull}
             # Strip suffix
-            envChangelog=${envChangelogFull::-3}
+            #envChangelog=${envChangelogFull::-3}
+            envChangelog=${envChangelogFull:0:${#envChangelogFull}-3}
             echo ${envChangelog}
             # Strip prefix
             TARI_NETWORK_CHANGELOG=${envChangelog##*/changelog-}
