@@ -388,7 +388,7 @@ jobs:
           name: tari_miner-${{ matrix.builds.name }}
           path: "${{ github.workspace }}${{ env.TBN_DIST }}/tari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}*"
 
-      - name: Prep diag-utils for upload
+      - name: Prep diag-utils archive for upload
         continue-on-error: true
         shell: bash
         run: |
@@ -399,13 +399,16 @@ jobs:
             -name "randomx-*${{ env.TBN_EXT}}" -type f -perm -+x -exec cp -v {} . \;
           ${SHARUN} * \
             >> "${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}.sha256"
+          7z a "${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}.zip" *
+          ${SHARUN} "${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}" \
+            >> "${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}.zip.sha256"
 
       - name: Artifact upload for diag-utils
         continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}
-          path: "${{ github.workspace }}${{ env.TBN_DIST }}/diag-utils/*"
+          path: "${{ github.workspace }}${{ env.TBN_DIST }}/diag-utils/*.zip*"
 
       - name: Sync dist to S3 - Bash
         continue-on-error: true # Don't break if s3 upload fails
