@@ -24,24 +24,24 @@ use std::{
     default::Default,
     fmt::{Debug, Formatter},
     path::PathBuf,
-    process,
     str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
 use rand::rngs::OsRng;
+use tari_app_utilities::identity_management::save_as_json;
 use tari_base_node::{run_base_node, BaseNodeConfig, MetricsConfig};
 use tari_base_node_grpc_client::BaseNodeGrpcClient;
 use tari_common::configuration::{CommonConfig, MultiaddrList};
 use tari_comms::{multiaddr::Multiaddr, peer_manager::PeerFeatures, NodeIdentity};
-use tari_comms_dht::DhtConfig;
+use tari_comms_dht::{DbConnectionUrl, DhtConfig};
 use tari_p2p::{auto_update::AutoUpdateConfig, Network, PeerSeedsConfig, TransportType};
 use tari_shutdown::Shutdown;
 use tokio::task;
 use tonic::transport::Channel;
 
-use crate::{get_peer_addresses, get_port, wait_for_service, TariWorld};
+use crate::{get_base_dir, get_peer_addresses, get_port, wait_for_service, TariWorld};
 
 #[derive(Clone)]
 pub struct BaseNodeProcess {
@@ -80,11 +80,6 @@ pub async fn spawn_base_node(world: &mut TariWorld, is_seed_node: bool, bn_name:
     spawn_base_node_with_config(world, is_seed_node, bn_name, peers, BaseNodeConfig::default()).await;
 }
 
-pub fn get_base_dir() -> PathBuf {
-    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    crate_root.join(format!("tests/temp/cucumber_{}", process::id()))
-}
-
 pub async fn spawn_base_node_with_config(
     world: &mut TariWorld,
     is_seed_node: bool,
@@ -96,7 +91,6 @@ pub async fn spawn_base_node_with_config(
     let grpc_port: u64;
     let temp_dir_path: PathBuf;
     let base_node_identity: NodeIdentity;
-    let base_node_address: Multiaddr;
 
     if let Some(node_ps) = world.base_nodes.get(&bn_name) {
         port = node_ps.port;
@@ -116,8 +110,9 @@ pub async fn spawn_base_node_with_config(
             .join(format!("grpc_port_{}", grpc_port))
             .join(bn_name.clone());
 
-        base_node_address = Multiaddr::from_str(&format!("/ip4/127.0.0.1/tcp/{}", port)).unwrap();
+        let base_node_address = Multiaddr::from_str(&format!("/ip4/127.0.0.1/tcp/{}", port)).unwrap();
         base_node_identity = NodeIdentity::random(&mut OsRng, base_node_address, PeerFeatures::COMMUNICATION_NODE);
+        save_as_json(temp_dir_path.join("base_node.json"), &base_node_identity).unwrap();
     };
 
     println!("Base node identity: {}", base_node_identity);
@@ -163,8 +158,8 @@ pub async fn spawn_base_node_with_config(
         base_node_config.base_node.metadata_auto_ping_interval = Duration::from_secs(15);
 
         base_node_config.base_node.data_dir = temp_dir_path.to_path_buf();
-        base_node_config.base_node.identity_file = temp_dir_path.clone().join("base_node_id.json");
-        base_node_config.base_node.tor_identity_file = temp_dir_path.clone().join("base_node_tor_id.json");
+        base_node_config.base_node.identity_file = PathBuf::from("base_node_id.json");
+        base_node_config.base_node.tor_identity_file = PathBuf::from("base_node_tor_id.json");
         base_node_config.base_node.max_randomx_vms = 1;
 
         base_node_config.base_node.lmdb_path = temp_dir_path.to_path_buf();
@@ -179,6 +174,7 @@ pub async fn spawn_base_node_with_config(
             .listener_address
             .clone()]);
         base_node_config.base_node.p2p.dht = DhtConfig::default_local_test();
+        base_node_config.base_node.p2p.dht.database_url = DbConnectionUrl::file(format!("{}-dht.sqlite", port));
         base_node_config.base_node.p2p.dht.network_discovery.enabled = true;
         base_node_config.base_node.p2p.allow_test_addresses = true;
         base_node_config.base_node.storage.orphan_storage_capacity = 10;
@@ -193,6 +189,7 @@ pub async fn spawn_base_node_with_config(
             "Initializing base node: name={}; port={}; grpc_port={}; is_seed_node={}",
             name_cloned, port, grpc_port, is_seed_node
         );
+
         let result = run_base_node(shutdown, Arc::new(base_node_identity), Arc::new(base_node_config)).await;
         if let Err(e) = result {
             panic!("{:?}", e);

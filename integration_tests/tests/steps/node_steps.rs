@@ -667,7 +667,7 @@ async fn no_meddling_with_data(world: &mut TariWorld, node: String) {
         Ok(_) => panic!("The block should not have been valid"),
         Err(e) => assert_eq!(
             "Chain storage error: Validation error: Block validation error: MMR size for Kernel does not match. \
-             Expected: 3, received: 4"
+             Expected: 4, received: 5"
                 .to_string(),
             e.message()
         ),
@@ -680,7 +680,7 @@ async fn no_meddling_with_data(world: &mut TariWorld, node: String) {
         Ok(_) => panic!("The block should not have been valid"),
         Err(e) => assert_eq!(
             "Chain storage error: Validation error: Block validation error: MMR size for UTXO does not match. \
-             Expected: 3, received: 4"
+             Expected: 4968, received: 4969"
                 .to_string(),
             e.message()
         ),
@@ -693,7 +693,7 @@ async fn lagging_delayed_node(world: &mut TariWorld, delayed_node: String, node:
     let mut base_node_config = BaseNodeConfig::default();
     base_node_config.state_machine.blocks_behind_before_considered_lagging = delay;
 
-    spawn_base_node_with_config(world, true, delayed_node, vec![node], base_node_config).await;
+    spawn_base_node_with_config(world, false, delayed_node, vec![node], base_node_config).await;
 }
 
 #[then(expr = "node {word} has reached initial sync")]

@@ -14,6 +14,7 @@ members = [
     "base_layer/tari_mining_helper_ffi",
     "clients/rust/base_node_grpc_client",
     "clients/rust/wallet_grpc_client",
+    # "clients/rust/web_chat",
     "comms/core",
     "comms/dht",
     "comms/rpc_macros",
@@ -44,5 +45,4 @@ panic = "abort"
 overflow-checks = true
 
 [patch.crates-io]
-# Temporarily lock pgp to commit (master branch at time of writing) because the currently release crate locks zeroize to =1.3
 liblmdb-sys = { git = "https://github.com/tari-project/lmdb-rs", tag = "0.7.6-tari.1" }

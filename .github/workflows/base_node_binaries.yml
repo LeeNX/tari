@@ -90,23 +90,7 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: |
-          tagnet=${{github.ref_name}}
-          echo $tagnet
-          # case match is not RegEx, but wildcards/globs
-          case "$tagnet" in
-            v*-pre.*)
-              TARI_NETWORK=esme
-              TARI_NETWORK_DIR=testnet
-              ;;
-            v*-rc.*)
-              TARI_NETWORK=nextnet
-              TARI_NETWORK_DIR=nextnet
-              ;;
-            *)
-              TARI_NETWORK=mainnet
-              TARI_NETWORK_DIR=mainnet
-              ;;
-          esac
+          source buildtools/multinet_envs.sh ${{github.ref_name}}
           echo ${TARI_NETWORK}
           echo ${TARI_NETWORK_DIR}
           echo "TARI_NETWORK=${TARI_NETWORK}" >> $GITHUB_ENV
@@ -181,6 +165,14 @@ jobs:
         run: |
           echo "PLATFORM_SPECIFIC_DIR=osx" >> $GITHUB_ENV
           echo "LIB_EXT=.dylib" >> $GITHUB_ENV
+
+      # Hardcoded sdk for MacOSX 11 on ARM64
+      - name: Set environment variables - macOS - ARM64 (pin/sdk)
+        if: ${{ startsWith(runner.os,'macOS') && matrix.builds.name == 'macos-arm64' }}
+        run: |
+          xcrun --show-sdk-path
+          ls -la "/Library/Developer/CommandLineTools/SDKs/"
+          echo "RANDOMX_RS_CMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk" >> $GITHUB_ENV
 
       - name: Set environment variables - Ubuntu
         if: startsWith(runner.os,'Linux')
