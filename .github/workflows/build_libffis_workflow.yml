@@ -112,6 +112,8 @@ jobs:
               --package ${{ matrix.libffis }} \
               --target=${{ matrix.builds.target }}
           else
+            rustup target add ${{ matrix.builds.target }}
+            # rustup toolchain install stable-aarch64-unknown-linux-gnu --force-non-host
             cargo build --lib --release --locked \
               --package ${{ matrix.libffis }} \
               --target=${{ matrix.builds.target }}
