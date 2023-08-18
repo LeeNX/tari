@@ -2,6 +2,9 @@
 name: Build libffis - workflow_call/on-demand
 
 'on':
+  push:
+    branches:
+      - build-*
   workflow_call:
     inputs:
       libffis:
@@ -25,7 +28,7 @@ jobs:
       matrix:
         # libffis: [minotari_wallet_ffi, tari_chat_ffi]
         # libffis: [${{ inputs.libffis }}]
-        libffis: ${{ fromJSON(github.event.inputs.libffis)}}
+        libffis: ${{ fromJSON(github.event.inputs.libffis) }}
         build: [
           {
             "target": "x86_64-linux-android",
