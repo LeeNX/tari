@@ -95,7 +95,7 @@ jobs:
         with:
           components: rustfmt, clippy
           # toolchain: ${{ inputs.toolchain }}
-          # toolchain: stable
+          toolchain: stable
           targets: ${{ matrix.builds.target }}
 
       # Don't use caches for binary builds. Start from a clean slate.
@@ -103,7 +103,7 @@ jobs:
       - name: Build ${{ matrix.libffis }} libraries
         shell: bash
         run: |
-          if [ "${{ matrix.builds.cross }}" != "true" ]; then
+          if [ "${{ matrix.builds.cross }}" == "true" ]; then
             cargo install cross
             cross build --lib --release --locked \
               --package ${{ matrix.libffis }} \
