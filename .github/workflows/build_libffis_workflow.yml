@@ -22,14 +22,13 @@ env:
   TARI_NETWORK_CHANGELOG: "development"
 
 jobs:
-  libffi_builds:
+  builds:
     strategy:
       fail-fast: false
       matrix:
-        # libffis: [minotari_wallet_ffi, tari_chat_ffi]
-        # libffis: [${{ inputs.libffis }}]
-        libffis: ${{ fromJSON(github.event.inputs.libffis) }}
-        build: [
+        libffis: [minotari_wallet_ffi, tari_chat_ffi]
+        # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
+        builds: [
           {
             "target": "x86_64-linux-android",
             "cross": true,
@@ -57,7 +56,7 @@ jobs:
           }
         ]
 
-    runs-on: ${{ matrix.build.runs-on }}
+    runs-on: ${{ matrix.builds.runs-on }}
 
     steps:
       - name: Checkout source code
@@ -74,17 +73,17 @@ jobs:
           echo "TARI_NETWORK_CHANGELOG=${TARI_NETWORK_CHANGELOG}" >> $GITHUB_ENV
 
       - name: Declare Android/iOS envs
-        # if: ${{ contains(matrix.build.target, 'android') }}
+        # if: ${{ contains(matrix.builds.target, 'android') }}
         shell: bash
         run: |
-          if [ "${{ matrix.build.target }}" == "android" ]; then
+          if [ "${{ matrix.builds.target }}" == "android" ]; then
             echo "CFLAGS='-DMDB_USE_ROBUST=0'" >> $GITHUB_ENV
             echo "TARGET_PLATFORM=android" >> $GITHUB_ENV
           else
             echo "TARGET_PLATFORM=ios" >> $GITHUB_ENV
           fi
           # Strip begining
-          tempEnv="${{ matrix.build.target }}"
+          tempEnv="${{ matrix.builds.target }}"
           echo "TARGET_ARCH=${tempEnv/-*/}" >> $GITHUB_ENV
           # Strip outside of *_X_*
           tempEnv="${{ matrix.libffis }}"
@@ -96,7 +95,7 @@ jobs:
         with:
           components: rustfmt, clippy
           toolchain: ${{ inputs.toolchain }}
-          targets: ${{ matrix.build.target }}
+          targets: ${{ matrix.builds.target }}
 
       # Don't use caches for binary builds. Start from a clean slate.
 
@@ -107,11 +106,11 @@ jobs:
             cargo install cross
             cross build --lib --release --locked \
               --package ${{ matrix.libffis }} \
-              --target=${{ matrix.build.target }}
+              --target=${{ matrix.builds.target }}
           else
             cargo build --lib --release --locked \
               --package ${{ matrix.libffis }} \
-              --target=${{ matrix.build.target }}
+              --target=${{ matrix.builds.target }}
           fi
 
       - name: Prepare ${{ matrix.libffis }} libraries
@@ -119,7 +118,7 @@ jobs:
         run: |
           mkdir -p "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
           cd "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
-          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.build.target }}/release/lib${{ matrix.libffis }}.a" "lib${{ matrix.libffis }}.android_${target_platform}.a"
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/lib${{ matrix.libffis }}.a" "lib${{ matrix.libffis }}.android_${target_platform}.a"
           cp -v "$GITHUB_WORKSPACE/base_layer/${{ env.TARGET_NAME }}_ffi/${{ env.TARGET_NAME }}.h" lib${{ matrix.libffis }}.h
           if [ -f "$GITHUB_WORKSPACE/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" ]; then
             cp -v "$GITHUB_WORKSPACE/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" .
@@ -142,7 +141,7 @@ jobs:
 
   ios_assemble_universal:
     name: Assemble iOS universal
-    needs: libffi_builds
+    needs: builds
 
     strategy:
       fail-fast: false
