@@ -95,7 +95,7 @@ jobs:
         with:
           components: rustfmt, clippy
           # toolchain: ${{ inputs.toolchain }}
-          toolchain: stable
+          # toolchain: stable
           targets: ${{ matrix.builds.target }}
 
       # Don't use caches for binary builds. Start from a clean slate.
