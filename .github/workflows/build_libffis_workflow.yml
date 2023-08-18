@@ -76,7 +76,7 @@ jobs:
         # if: ${{ contains(matrix.builds.target, 'android') }}
         shell: bash
         run: |
-          if [ "${{ matrix.builds.target }}" == "android" ]; then
+          if [[ "${{ matrix.builds.target }}" =~ "android" ]]; then
             echo "CFLAGS='-DMDB_USE_ROBUST=0'" >> $GITHUB_ENV
             echo "TARGET_PLATFORM=android" >> $GITHUB_ENV
           else
