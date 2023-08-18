@@ -6,7 +6,7 @@ name: Build libffis - workflow_call/on-demand
     inputs:
       libffis:
         type: string
-        default: minotari_wallet_ffi, tari_chat_ffi
+        default: "[minotari_wallet_ffi, tari_chat_ffi]"
         required: true
       toolchain:
         type: string
@@ -24,7 +24,8 @@ jobs:
       fail-fast: false
       matrix:
         # libffis: [minotari_wallet_ffi, tari_chat_ffi]
-        libffis: [${{ inputs.libffis }}]
+        # libffis: [${{ inputs.libffis }}]
+        libffis: ${{ fromJSON(github.event.inputs.libffis)}}
         build: [
           {
             "target": "x86_64-linux-android",
