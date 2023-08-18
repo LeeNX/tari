@@ -103,9 +103,9 @@ jobs:
       - name: Build ${{ matrix.libffis }} libraries
         shell: bash
         run: |
-          rustup target list
-          rustup toolchain list
-          rustup show
+          # rustup target list
+          # rustup toolchain list
+          # rustup show
           if [ "${{ matrix.builds.cross }}" == "true" ]; then
             cargo install cross
             cross build --lib --release --locked \
@@ -124,7 +124,7 @@ jobs:
         run: |
           mkdir -p "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
           cd "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
-          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/lib${{ matrix.libffis }}.a" "lib${{ matrix.libffis }}.android_${target_platform}.a"
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/lib${{ matrix.libffis }}.a" "lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}.a"
           cp -v "$GITHUB_WORKSPACE/base_layer/${{ env.TARGET_NAME }}_ffi/${{ env.TARGET_NAME }}.h" lib${{ matrix.libffis }}.h
           if [ -f "$GITHUB_WORKSPACE/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" ]; then
             cp -v "$GITHUB_WORKSPACE/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" .
@@ -133,10 +133,10 @@ jobs:
           fi
           cd ..
           shasum -a 256 \
-            "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}.a" \
+            "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}.a" \
             "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.h" \
             "${TARI_NETWORK_CHANGELOG_FILE}" \
-              > "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}.sha256"
+              > "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}.sha256"
           ls -alht "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
 
       - name: Upload artifacts
