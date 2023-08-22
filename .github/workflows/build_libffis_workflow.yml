@@ -5,11 +5,13 @@ name: Build libffis - workflow_call/on-demand
   push:
     branches:
       - build-*
-  workflow_call:
+  # workflow_call:
+  workflow_dispatch:
     inputs:
       libffis:
         type: string
-        default: "[minotari_wallet_ffi, minotari_chat_ffi]"
+        # default: '["minotari_wallet_ffi", "minotari_chat_ffi"]'
+        default: '["minotari_chat_ffi"]'
         required: true
       toolchain:
         type: string
@@ -26,9 +28,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        libffis: [minotari_wallet_ffi, minotari_chat_ffi]
-        # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
-        builds: [
+        # libffis: [minotari_wallet_ffi, minotari_chat_ffi]
+        libffis: ${{ fromJSON(github.event.inputs.libffis) }}
+        builds-disabled: [
           {
             "target": "x86_64-linux-android",
             "cross": true,
@@ -38,7 +40,9 @@ jobs:
             "target": "aarch64-linux-android",
             "cross": true,
             "runs-on": "ubuntu-latest"
-          },
+          }
+        ]
+        builds: [
           {
             "target": "x86_64-apple-ios",
             "cross": false,
@@ -160,8 +164,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        libffis: [minotari_wallet_ffi, minotari_chat_ffi]
-        # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
+        # libffis: [minotari_wallet_ffi, minotari_chat_ffi]
+        libffis: ${{ fromJSON(github.event.inputs.libffis) }}
 
     runs-on: macos-latest
 
