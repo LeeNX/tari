@@ -22,6 +22,7 @@ name: Build libffis - workflow_call/on-demand
 env:
   CARGO_UNSTABLE_SPARSE_REGISTRY: true
   TARI_NETWORK_CHANGELOG: "development"
+  LIBFFIS: '["minotari_chat_ffi"]'
 
 jobs:
   builds:
@@ -29,7 +30,8 @@ jobs:
       fail-fast: false
       matrix:
         # libffis: [minotari_wallet_ffi, minotari_chat_ffi]
-        libffis: ${{ fromJSON(github.event.inputs.libffis) }}
+        # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
+        libffis: ${{ fromJSON(env.LIBFFIS) }}
         builds-disabled: [
           {
             "target": "x86_64-linux-android",
@@ -165,7 +167,8 @@ jobs:
       fail-fast: false
       matrix:
         # libffis: [minotari_wallet_ffi, minotari_chat_ffi]
-        libffis: ${{ fromJSON(github.event.inputs.libffis) }}
+        # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
+        libffis: ${{ fromJSON(env.LIBFFIS) }}
 
     runs-on: macos-latest
 
