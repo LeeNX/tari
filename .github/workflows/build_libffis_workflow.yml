@@ -33,9 +33,9 @@ jobs:
         # libffis: ${{ fromJSON(github.event.inputs.libffiss) }}
         # libffis: ${{ fromJSON(env.LIBFFIS) }}
         # libffis: ${{ env.TESTLIBFFIS }}
-        libffis: ["minotari_chat_ffi"]
-
-        builds-disabled: [
+        # libffis: ["minotari_chat_ffi"]
+        libffis: ${{ fromJSON(env.TESTLIBFFIS) }}
+        exclude: [
           {
             "target": "x86_64-linux-android",
             "cross": true,
@@ -173,7 +173,9 @@ jobs:
         # libffis: ${{ fromJSON(github.event.inputs.libffiss) }}
         # libffis: ${{ fromJSON(env.LIBFFIS) }}
         # libffis: ${{ env.TESTLIBFFIS }}
-        libffis: ["minotari_chat_ffi"]
+        # libffis: ["minotari_chat_ffi"]
+        libffis: ${{ fromJSON(env.TESTLIBFFIS) }}
+
 
     runs-on: macos-latest
 
