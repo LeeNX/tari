@@ -43,13 +43,14 @@ jobs:
           #
           # Setup the json build matrix
           #matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
+          matrix=$(echo ${matrix_selection} | jq -s -c)
           echo $matrix
           echo $matrix | jq .
           echo "matrix=${matrix}" >> $GITHUB_OUTPUT
           echo "libffiss=${TESTLIBFFIS}" >> $GITHUB_OUTPUT
 
   matrix-check:
-    #if: ${{ env.MATRIX-CHECK }}
+    # if: ${{ env.MATRIX-CHECK }}
     if: ${{ true }}
     runs-on: ubuntu-latest
     needs: matrix-prep
