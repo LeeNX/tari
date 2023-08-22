@@ -129,23 +129,23 @@ jobs:
       - name: Prepare ${{ matrix.libffis }} libraries
         shell: bash
         run: |
-          mkdir -p "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
-          cd "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
+          mkdir -p "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
+          cd "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
           # libwallet-ios-aarch64-sim
           cp -v "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/lib${{ matrix.libffis }}.a" "lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.a"
           cp -v "$GITHUB_WORKSPACE/base_layer/${{ env.TARGET_NAME }}_ffi/${{ env.TARGET_NAME }}.h" lib${{ matrix.libffis }}.h
           if [ -f "$GITHUB_WORKSPACE/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" ]; then
             cp -v "$GITHUB_WORKSPACE/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" .
-            TARI_NETWORK_CHANGELOG_FILE=${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md
+            TARI_NETWORK_CHANGELOG_FILE=${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md
             echo ${TARI_NETWORK_CHANGELOG_FILE}
           fi
           cd ..
           shasum -a 256 \
-            "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.a" \
-            "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.h" \
+            "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.a" \
+            "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.h" \
             "${TARI_NETWORK_CHANGELOG_FILE}" \
-              > "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.sha256"
-          ls -alht "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}"
+              > "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.sha256"
+          ls -alht "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -153,7 +153,7 @@ jobs:
           name: ${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}
           path: ${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}
 
-  ios_assemble_universal:
+  ios_assemble:
     name: Assemble iOS multiArch for ${{ matrix.libffis }}"
     needs: builds
 
@@ -169,9 +169,10 @@ jobs:
       - name: Install macOS dependencies
         run: brew install coreutils
 
-      - name: Download iOS libffiss
+      - name: Download iOS libffiss for ${{ matrix.libffis }}
         uses: actions/download-artifact@v3
         with:
+          name: ${{ matrix.libffis }}-ios
           path: libffiss
 
       - name: Verify checksums
