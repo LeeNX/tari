@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        libffis: [minotari_wallet_ffi, tari_chat_ffi]
+        libffis: [minotari_wallet_ffi, minotari_chat_ffi]
         # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
         builds: [
           {
