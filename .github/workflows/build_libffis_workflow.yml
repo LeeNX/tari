@@ -29,6 +29,8 @@ jobs:
       - name: Set Matrix
         id: set-matrix
         run: |
+          ls -alht "${{ env.matrix-json-file }}"
+          cat "${{ env.matrix-json-file }}
           #
           # build all targets images
           # matrix=$( jq -s -c .[] .github/workflows/build_libffis_workflow.json )
