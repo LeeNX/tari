@@ -99,6 +99,10 @@ jobs:
           targets: ${{ matrix.builds.target }}
 
       # Don't use caches for binary builds. Start from a clean slate.
+      # On release?
+      - name: Cache cargo files and outputs
+        if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
+        uses: Swatinem/rust-cache@v2
 
       - name: Build ${{ matrix.libffis }} libraries
         shell: bash
