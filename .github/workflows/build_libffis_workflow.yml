@@ -150,11 +150,14 @@ jobs:
           path: ${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}
 
   ios_assemble_universal:
-    name: Assemble iOS universal
+    name: Assemble iOS multiArch for ${{ matrix.libffis }}"
     needs: builds
 
     strategy:
       fail-fast: false
+      matrix:
+        libffis: [minotari_wallet_ffi, minotari_chat_ffi]
+        # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
 
     runs-on: macos-latest
 
@@ -182,7 +185,7 @@ jobs:
         run: |
           ls -alhtR
           mkdir libffis-ios-universal
-          cp -v "libffis-ios-x86_64/lib${{ inputs.libffis }}.h" \
+          cp -v "libffis-ios-x86_64/lib${{ matrix.libffis }}.h" \
             libffis-ios-universal/
           echo "Check for changelog"
           if [ -f libffis-ios-x86_64/changelog-*.md ]; then
@@ -203,19 +206,19 @@ jobs:
             echo "No changelog found"
           fi
           lipo -create \
-            "libffis-ios-x86_64/lib${{ inputs.libffis }}.ios_x86_64.a" \
-            "libffis-ios-aarch64/lib${{ inputs.libffis }}.ios_aarch64.a" \
-              -output "libffis-ios-universal/lib${{ inputs.libffis }}.ios_universal.a"
+            "libffis-ios-x86_64/lib${{ matrix.libffis }}.ios_x86_64.a" \
+            "libffis-ios-aarch64/lib${{ matrix.libffis }}.ios_aarch64.a" \
+              -output "libffis-ios-universal/lib${{ matrix.libffis }}.ios_universal.a"
           shasum -a 256 \
-            "libffis-ios-universal/lib${{ inputs.libffis }}.ios_universal.a" \
-            "libffis-ios-universal/lib${{ inputs.libffis }}.h" "${TARI_NETWORK_CHANGELOG_FILE}" \
-              > "libffis-ios-universal/lib${{ inputs.libffis }}.ios_universal.sha256"
+            "libffis-ios-universal/lib${{ matrix.libffis }}.ios_universal.a" \
+            "libffis-ios-universal/lib${{ matrix.libffis }}.h" "${TARI_NETWORK_CHANGELOG_FILE}" \
+              > "libffis-ios-universal/lib${{ matrix.libffis }}.ios_universal.sha256"
           ls -alhtR
 
       - name: Upload iOS universal libffis artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: libffis-ios-universal
+          name: ${{ matrix.libffis }}-ios-universal
           path: libffiss/libffis-ios-universal
 
       - name: Assemble iOS libffis xcframework
@@ -225,9 +228,9 @@ jobs:
           ls -alhtR
           mkdir libffis-ios-universal-sim
           lipo -create \
-            "libffis-ios-x86_64/lib${{ inputs.libffis }}.ios_x86_64.a" \
-            "libffis-ios-aarch64-sim/lib${{ inputs.libffis }}.ios_aarch64-sim.a" \
-              -output "libffis-ios-universal-sim/lib${{ inputs.libffis }}.ios_universal-sim.a"
+            "libffis-ios-x86_64/lib${{ matrix.libffis }}.ios_x86_64.a" \
+            "libffis-ios-aarch64-sim/lib${{ matrix.libffis }}.ios_aarch64-sim.a" \
+              -output "libffis-ios-universal-sim/lib${{ matrix.libffis }}.ios_universal-sim.a"
           mkdir libffis-ios-xcframework
           echo "Check for changelog"
           if [ -f libffis-ios-x86_64/changelog-*.md ]; then
@@ -248,23 +251,23 @@ jobs:
             echo "No changelog found"
           fi
           xcodebuild -create-xcframework \
-            -library "libffis-ios-universal-sim/lib${{ inputs.libffis }}.ios_universal-sim.a" \
-              -headers "libffis-ios-x86_64/lib${{ inputs.libffis }}.h" \
-            -library "libffis-ios-aarch64/lib${{ inputs.libffis }}.ios_aarch64.a" \
-              -headers "libffis-ios-aarch64/lib${{ inputs.libffis }}.h" \
-            -output libffis-ios-xcframework/lib${{ inputs.libffis }}_ios.xcframework
+            -library "libffis-ios-universal-sim/lib${{ matrix.libffis }}.ios_universal-sim.a" \
+              -headers "libffis-ios-x86_64/lib${{ matrix.libffis }}.h" \
+            -library "libffis-ios-aarch64/lib${{ matrix.libffis }}.ios_aarch64.a" \
+              -headers "libffis-ios-aarch64/lib${{ matrix.libffis }}.h" \
+            -output libffis-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework
           shasum -a 256 \
-            "libffis-ios-xcframework/lib${{ inputs.libffis }}_ios.xcframework/Info.plist" \
-            "libffis-ios-xcframework/lib${{ inputs.libffis }}_ios.xcframework/ios-arm64/Headers" \
-            "libffis-ios-xcframework/lib${{ inputs.libffis }}_ios.xcframework/ios-arm64/lib${{ inputs.libffis }}.ios_aarch64.a" \
-            "libffis-ios-xcframework/lib${{ inputs.libffis }}_ios.xcframework/ios-arm64_x86_64-simulator/Headers" \
-            "libffis-ios-xcframework/lib${{ inputs.libffis }}_ios.xcframework/ios-arm64_x86_64-simulator/lib${{ inputs.libffis }}.ios_universal-sim.a" \
+            "libffis-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework/Info.plist" \
+            "libffis-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework/ios-arm64/Headers" \
+            "libffis-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework/ios-arm64/lib${{ matrix.libffis }}.ios_aarch64.a" \
+            "libffis-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework/ios-arm64_x86_64-simulator/Headers" \
+            "libffis-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework/ios-arm64_x86_64-simulator/lib${{ matrix.libffis }}.ios_universal-sim.a" \
             "${TARI_NETWORK_CHANGELOG_FILE}" \
-              > "libffis-ios-xcframework/lib${{ inputs.libffis }}.ios_xcframework.sha256"
+              > "libffis-ios-xcframework/lib${{ matrix.libffis }}.ios_xcframework.sha256"
           ls -alhtR
 
       - name: Upload iOS xcframework libffis artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: libffis-ios-xcframework
+          name: ${{ matrix.libffis }}-ios-xcframework
           path: libffiss/libffis-ios-xcframework
