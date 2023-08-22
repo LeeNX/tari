@@ -9,7 +9,7 @@ name: Build libffis - workflow_call/on-demand
     inputs:
       libffis:
         type: string
-        default: "[minotari_wallet_ffi, tari_chat_ffi]"
+        default: "[minotari_wallet_ffi, minotari_chat_ffi]"
         required: true
       toolchain:
         type: string
