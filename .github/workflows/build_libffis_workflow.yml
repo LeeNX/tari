@@ -31,7 +31,9 @@ jobs:
       matrix:
         # libffis: [minotari_wallet_ffi, minotari_chat_ffi]
         # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
-        libffis: ${{ fromJSON(env.LIBFFIS) }}
+        # libffis: ${{ fromJSON(env.LIBFFIS) }}
+        libffis: ${{ env.LIBFFIS }}
+
         builds-disabled: [
           {
             "target": "x86_64-linux-android",
@@ -168,7 +170,8 @@ jobs:
       matrix:
         # libffis: [minotari_wallet_ffi, minotari_chat_ffi]
         # libffis: ${{ fromJSON(github.event.inputs.libffis) }}
-        libffis: ${{ fromJSON(env.LIBFFIS) }}
+        #libffis: ${{ fromJSON(env.LIBFFIS) }}
+        libffis: ${{ env.LIBFFIS }}
 
     runs-on: macos-latest
 
