@@ -257,7 +257,7 @@ jobs:
         working-directory: libffiss
         run: |
           ls -alhtR
-          mkdir libffis-ios-universal-sim
+          mkdir {{ matrix.libffis }}-ios-universal-sim
           lipo -create \
             "${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.ios_x86_64.a" \
             "${{ matrix.libffis }}-ios-aarch64-sim/lib${{ matrix.libffis }}.ios_aarch64-sim.a" \
