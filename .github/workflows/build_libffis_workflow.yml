@@ -151,7 +151,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}
-          path: ${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}
+          path: ${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}
 
   ios_assemble:
     name: Assemble iOS multiArch for ${{ matrix.libffis }}"
@@ -172,7 +172,7 @@ jobs:
       - name: Download iOS libffiss for ${{ matrix.libffis }}
         uses: actions/download-artifact@v3
         with:
-          name: ${{ matrix.libffis }}-ios
+          # name: ${{ matrix.libffis }}-ios
           path: libffiss
 
       - name: Verify checksums
