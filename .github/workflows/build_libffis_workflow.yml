@@ -47,7 +47,8 @@ jobs:
           echo "libffiss=${TESTLIBFFIS}" >> $GITHUB_OUTPUT
 
   matrix-check:
-    if: ${{ env.MATRIX-CHECK }}
+    #if: ${{ env.MATRIX-CHECK }}
+    if: ${{ true }}
     runs-on: ubuntu-latest
     needs: matrix-prep
     steps:
