@@ -16,8 +16,8 @@ env:
   TARI_NETWORK_CHANGELOG: 'development'
   TOOLCHAIN: 'stable'
   ## Must be a JSon string
-  BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
-  # BUILD_LIBFFIS: '["minotari_chat_ffi"]'
+  # BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
+  BUILD_LIBFFIS: '["minotari_chat_ffi"]'
   matrix-json-file: '.github/workflows/build_libffis_workflow.json'
 
 concurrency:
@@ -328,11 +328,8 @@ jobs:
         working-directory: libffiss
         run: |
           ls -alht
-          # find . -name "*-ios-xcframework"
-          FFI_DIRS=(
-            "minotari_wallet_ffi"
-            "minotari_chat_ffi"
-          )
+          # Spaces are important - string to array
+          FFI_DIRS=( $(echo ${BUILD_LIBFFIS} | jq -r '.[]') )
           for FFI_DIR in "${FFI_DIRS[@]}"; do
             if [ -d ${FFI_DIR}-ios-xcframework ]; then
               7z a ${FFI_DIR}.ios-xcframework.zip ${FFI_DIR}-ios-xcframework/*
