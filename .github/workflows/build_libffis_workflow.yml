@@ -16,8 +16,8 @@ env:
   TARI_NETWORK_CHANGELOG: 'development'
   TOOLCHAIN: 'stable'
   ## Must be a JSon string
-  BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
-  # BUILD_LIBFFIS: '["minotari_chat_ffi"]'
+  # BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
+  BUILD_LIBFFIS: '["minotari_chat_ffi"]'
   matrix-json-file: '.github/workflows/build_libffis_workflow.json'
 
 concurrency:
@@ -325,24 +325,26 @@ jobs:
           rm -fv ibffiss.txt.sha256-verify
           mkdir -p releases
 
-      - name: Archive iOS xcframework
+      - name: Archive iOS xcframework(s)
         shell: bash
         working-directory: libffiss
         run: |
-          ls -alht
+          ls -alhtR
           # Spaces are important - string to array
           FFI_DIRS=( $(echo ${BUILD_LIBFFIS} | jq -r '.[]') )
           for FFI_DIR in "${FFI_DIRS[@]}"; do
+            echo "xcframework for ${FFI_DIR}"
             if [ -d ${FFI_DIR}-ios-xcframework ]; then
               7z a ${FFI_DIR}.ios-xcframework.zip ${FFI_DIR}-ios-xcframework/*
-              rm -fvr ${FFI_DIR}-ios-xcframework
+              # rm -fvr ${FFI_DIR}-ios-xcframework
               shasum -a 256 \
                 "${FFI_DIR}.ios-xcframework.zip" \
                 > "${FFI_DIR}.ios-xcframework.zip.sha256"
+              ls -alhtR
               mv -v "${FFI_DIR}.ios-xcframework.zip*" releases
             fi
           done
-          ls -alht
+          ls -alhtR
 
       - name: Clean-up
         shell: bash
@@ -351,7 +353,7 @@ jobs:
           ls -alhtR
           find -E . -regex '.*\.(a|h|md|sha256)' -type f \
             -not \( -path "./releases" -prune \) \
-            -exec cp -fv {} releases \;
+            -exec cp -fv {} ./releases/ \;
           ls -alhtR
 
       - name: Create release
