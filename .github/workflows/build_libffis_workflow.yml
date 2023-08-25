@@ -323,6 +323,42 @@ jobs:
           cat libffiss.txt.sha256-verify
           sha256sum -c libffiss.txt.sha256-verify
 
+      - name: Archive iOS xcframework
+        shell: bash
+        working-directory: libffiss
+        run: |
+          ls -alht
+          # find . -name "*-ios-xcframework"
+          FFI_DIRS=(
+            "minotari_wallet_ffi"
+            "minotari_chat_ffi"
+          )
+          for FFI_DIR in "${FFI_DIRS[@]}"; do
+            if [ -d ${FFI_DIR}-ios-xcframework ]; then
+              7z a ${FFI_DIR}.ios-xcframework.zip ${FFI_DIR}-ios-xcframework/*
+              rm -fr ${FFI_DIR}-ios-xcframework/*
+              shasum -a 256 \
+                "${FFI_DIR}_ffi.ios-xcframework.zip" \
+                > "${FFI_DIR}.ios-xcframework.zip.sha256"
+            fi
+          done
+          ls -alht
+
+      - name: Clean-up
+        shell: bash
+        working-directory: libffiss
+        run: |
+          ls -alhtR
+          CLEAN_FILES=(
+            "libffiss.txt.sha256-verify"
+            "Info.plist"
+            "Headers"
+          )
+          for FILE in "${CLEAN_FILES[@]}"; do
+            find . -name ${FILE} -type f -exec rm -fv {} \;
+          done
+          ls -alhtR
+
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
