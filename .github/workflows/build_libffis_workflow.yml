@@ -16,8 +16,8 @@ env:
   TARI_NETWORK_CHANGELOG: 'development'
   TOOLCHAIN: 'stable'
   ## Must be a JSon string
-  # BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
-  BUILD_LIBFFIS: '["minotari_chat_ffi"]'
+  BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
+  # BUILD_LIBFFIS: '["minotari_chat_ffi"]'
   matrix-json-file: '.github/workflows/build_libffis_workflow.json'
 
 concurrency:
@@ -171,7 +171,7 @@ jobs:
             "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.h" \
             "${TARI_NETWORK_CHANGELOG_FILE}" \
               > "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.sha256"
-          ls -alht "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
+          ls -alhtR "${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -207,7 +207,6 @@ jobs:
         shell: bash
         working-directory: libffiss
         run: |
-          ls -alhtR
           find . -name "*.sha256" -type f -print | xargs cat >> libffiss.txt.sha256-verify
           cat libffiss.txt.sha256-verify
           sha256sum -c libffiss.txt.sha256-verify
@@ -318,7 +317,6 @@ jobs:
         shell: bash
         working-directory: libffiss
         run: |
-          ls -alhtR
           find . -name "*.sha256" -type f -print | xargs cat >> libffiss.txt.sha256-verify
           cat libffiss.txt.sha256-verify
           sha256sum -c libffiss.txt.sha256-verify
@@ -330,7 +328,6 @@ jobs:
         shell: bash
         working-directory: libffiss
         run: |
-          ls -alhtR
           # Spaces are important - string to array
           FFI_DIRS=( $(echo ${BUILD_LIBFFIS} | jq -r '.[]') )
           for FFI_DIR in "${FFI_DIRS[@]}"; do
@@ -340,17 +337,15 @@ jobs:
               rm -fvr ${FFI_DIR}-ios-xcframework
               shasum -a 256 \
                 "${FFI_DIR}.ios-xcframework.zip" \
-                > "${FFI_DIR}.ios-xcframework.zip.sha256"
+                  > "${FFI_DIR}.ios-xcframework.zip.sha256"
               mv -v ${FFI_DIR}.ios-xcframework.zip* releases
             fi
           done
-          ls -alhtR
 
       - name: Clean-up
         shell: bash
         working-directory: libffiss
         run: |
-          ls -alhtR
           find . -regextype posix-extended -regex '.*\.(a|h|md|sha256)' -type f \
             -not \( -path "./releases" -prune \) \
             -exec cp -fv {} ./releases/ \;
