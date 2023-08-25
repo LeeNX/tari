@@ -338,7 +338,7 @@ jobs:
               7z a ${FFI_DIR}.ios-xcframework.zip ${FFI_DIR}-ios-xcframework/*
               rm -fr ${FFI_DIR}-ios-xcframework/*
               shasum -a 256 \
-                "${FFI_DIR}_ffi.ios-xcframework.zip" \
+                "${FFI_DIR}.ios-xcframework.zip" \
                 > "${FFI_DIR}.ios-xcframework.zip.sha256"
             fi
           done
