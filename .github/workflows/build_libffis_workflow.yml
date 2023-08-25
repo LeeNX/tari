@@ -337,12 +337,10 @@ jobs:
             echo "xcframework for ${FFI_DIR}"
             if [ -d ${FFI_DIR}-ios-xcframework ]; then
               7z a ${FFI_DIR}.ios-xcframework.zip ${FFI_DIR}-ios-xcframework/*
-              # rm -fvr ${FFI_DIR}-ios-xcframework
+              rm -fvr ${FFI_DIR}-ios-xcframework
               shasum -a 256 \
                 "${FFI_DIR}.ios-xcframework.zip" \
                 > "${FFI_DIR}.ios-xcframework.zip.sha256"
-              ls -alhtR
-              pwd
               mv -v ${FFI_DIR}.ios-xcframework.zip* releases
             fi
           done
@@ -353,7 +351,7 @@ jobs:
         working-directory: libffiss
         run: |
           ls -alhtR
-          find -E . -regex '.*\.(a|h|md|sha256)' -type f \
+          find . -regextype posix-extended -regex '.*\.(a|h|md|sha256)' -type f \
             -not \( -path "./releases" -prune \) \
             -exec cp -fv {} ./releases/ \;
           ls -alhtR
