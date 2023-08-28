@@ -16,13 +16,13 @@ env:
   TARI_NETWORK_CHANGELOG: 'development'
   TOOLCHAIN: 'stable'
   ## Must be a JSon string
-  # BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
-  BUILD_LIBFFIS: '["minotari_chat_ffi"]'
+  BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
+  # BUILD_LIBFFIS: '["minotari_chat_ffi"]'
   matrix-json-file: '.github/workflows/build_libffis_workflow.json'
 
-#concurrency:
-#  group: ${{ github.workflow }}-${{ github.ref }}
-#  cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   matrix-prep:
@@ -131,7 +131,7 @@ jobs:
 
       # Don't use caches for binary builds when releasing. Start from a clean slate.
       - name: Cache cargo files and outputs
-        # if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
         uses: Swatinem/rust-cache@v2
 
       - name: Build ${{ matrix.libffis }} libraries
