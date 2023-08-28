@@ -16,13 +16,13 @@ env:
   TARI_NETWORK_CHANGELOG: 'development'
   TOOLCHAIN: 'stable'
   ## Must be a JSon string
-  BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
-  # BUILD_LIBFFIS: '["minotari_chat_ffi"]'
+  # BUILD_LIBFFIS: '["minotari_wallet_ffi","minotari_chat_ffi"]'
+  BUILD_LIBFFIS: '["minotari_chat_ffi"]'
   matrix-json-file: '.github/workflows/build_libffis_workflow.json'
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+#concurrency:
+#  group: ${{ github.workflow }}-${{ github.ref }}
+#  cancel-in-progress: true
 
 jobs:
   matrix-prep:
@@ -157,7 +157,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "${{ runner.temp }}/lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
-          cd "lib${{ runner.temp }}/${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
+          cd "${{ runner.temp }}/lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
           cp -v "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/lib${{ matrix.libffis }}.a" "lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.a"
           cp -v "$GITHUB_WORKSPACE/base_layer/${{ env.TARGET_NAME }}_ffi/${{ env.TARGET_NAME }}.h" lib${{ matrix.libffis }}.h
           if [ -f "$GITHUB_WORKSPACE/changelog-${{ env.TARI_NETWORK_CHANGELOG }}.md" ]; then
@@ -170,7 +170,7 @@ jobs:
             "lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.a" \
             "lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.h" \
             "${TARI_NETWORK_CHANGELOG_FILE}" \
-              > "${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.sha256"
+              > "lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}/lib${{ matrix.libffis }}.${{ env.TARGET_PLATFORM }}_${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}.sha256"
           ls -alhtR "${{ runner.temp }}/lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
 
       - name: Upload artifacts
@@ -218,12 +218,12 @@ jobs:
         run: |
           ls -alhtR
           mkdir lib${{ matrix.libffis }}-ios-universal
-          cp -v "${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.h" \
+          cp -v "lib${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.h" \
             lib${{ matrix.libffis }}-ios-universal/
           echo "Check for changelog"
-          if [ -f ${{ matrix.libffis }}-ios-x86_64/changelog-*.md ]; then
+          if [ -f lib${{ matrix.libffis }}-ios-x86_64/changelog-*.md ]; then
             echo "Changelog found"
-            envChangelogFull=$(ls ${{ matrix.libffis }}-ios-x86_64/changelog-*.md)
+            envChangelogFull=$(ls lib${{ matrix.libffis }}-ios-x86_64/changelog-*.md)
             echo ${envChangelogFull}
             # Strip suffix
             #envChangelog=${envChangelogFull::-3}
@@ -232,7 +232,7 @@ jobs:
             # Strip prefix
             TARI_NETWORK_CHANGELOG=${envChangelog##*/changelog-}
             echo ${TARI_NETWORK_CHANGELOG}
-            cp -v "${{ matrix.libffis }}-ios-x86_64/changelog-${TARI_NETWORK_CHANGELOG}.md" \
+            cp -v "lib${{ matrix.libffis }}-ios-x86_64/changelog-${TARI_NETWORK_CHANGELOG}.md" \
               lib${{ matrix.libffis }}-ios-universal/
             TARI_NETWORK_CHANGELOG_FILE=lib${{ matrix.libffis }}-ios-universal/changelog-${TARI_NETWORK_CHANGELOG}.md
             echo ${TARI_NETWORK_CHANGELOG_FILE}
@@ -240,8 +240,8 @@ jobs:
             echo "No changelog found"
           fi
           lipo -create \
-            "${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.ios_x86_64.a" \
-            "${{ matrix.libffis }}-ios-aarch64/lib${{ matrix.libffis }}.ios_aarch64.a" \
+            "lib${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.ios_x86_64.a" \
+            "lib${{ matrix.libffis }}-ios-aarch64/lib${{ matrix.libffis }}.ios_aarch64.a" \
               -output "lib${{ matrix.libffis }}-ios-universal/lib${{ matrix.libffis }}.ios_universal.a"
           shasum -a 256 \
             "lib${{ matrix.libffis }}-ios-universal/lib${{ matrix.libffis }}.ios_universal.a" \
@@ -253,7 +253,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: lib${{ matrix.libffis }}-ios-universal
-          path: libffiss/${{ matrix.libffis }}-ios-universal
+          path: libffiss/lib${{ matrix.libffis }}-ios-universal
 
       - name: Assemble iOS libffis xcframework
         shell: bash
@@ -262,14 +262,14 @@ jobs:
           ls -alhtR
           mkdir lib${{ matrix.libffis }}-ios-universal-sim
           lipo -create \
-            "${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.ios_x86_64.a" \
-            "${{ matrix.libffis }}-ios-aarch64-sim/lib${{ matrix.libffis }}.ios_aarch64-sim.a" \
+            "lib${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.ios_x86_64.a" \
+            "lib${{ matrix.libffis }}-ios-aarch64-sim/lib${{ matrix.libffis }}.ios_aarch64-sim.a" \
               -output "lib${{ matrix.libffis }}-ios-universal-sim/lib${{ matrix.libffis }}.ios_universal-sim.a"
           mkdir lib${{ matrix.libffis }}-ios-xcframework
           echo "Check for changelog"
-          if [ -f ${{ matrix.libffis }}-ios-x86_64/changelog-*.md ]; then
+          if [ -f lib${{ matrix.libffis }}-ios-x86_64/changelog-*.md ]; then
             echo "Changelog found"
-            envChangelogFull=$(ls ${{ matrix.libffis }}-ios-x86_64/changelog-*.md)
+            envChangelogFull=$(ls lib${{ matrix.libffis }}-ios-x86_64/changelog-*.md)
             echo ${envChangelogFull}
             # Strip suffix
             #envChangelog=${envChangelogFull::-3}
@@ -278,7 +278,7 @@ jobs:
             # Strip prefix
             TARI_NETWORK_CHANGELOG=${envChangelog##*/changelog-}
             echo ${TARI_NETWORK_CHANGELOG}
-            cp -v "${{ matrix.libffis }}-ios-x86_64/changelog-${TARI_NETWORK_CHANGELOG}.md" \
+            cp -v "lib${{ matrix.libffis }}-ios-x86_64/changelog-${TARI_NETWORK_CHANGELOG}.md" \
               lib${{ matrix.libffis }}-ios-xcframework/
             TARI_NETWORK_CHANGELOG_FILE=lib${{ matrix.libffis }}-ios-xcframework/changelog-${TARI_NETWORK_CHANGELOG}.md
             echo ${TARI_NETWORK_CHANGELOG_FILE}
@@ -287,9 +287,9 @@ jobs:
           fi
           xcodebuild -create-xcframework \
             -library "lib${{ matrix.libffis }}-ios-universal-sim/lib${{ matrix.libffis }}.ios_universal-sim.a" \
-              -headers "${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.h" \
-            -library "${{ matrix.libffis }}-ios-aarch64/lib${{ matrix.libffis }}.ios_aarch64.a" \
-              -headers "${{ matrix.libffis }}-ios-aarch64/lib${{ matrix.libffis }}.h" \
+              -headers "lib${{ matrix.libffis }}-ios-x86_64/lib${{ matrix.libffis }}.h" \
+            -library "lib${{ matrix.libffis }}-ios-aarch64/lib${{ matrix.libffis }}.ios_aarch64.a" \
+              -headers "lib${{ matrix.libffis }}-ios-aarch64/lib${{ matrix.libffis }}.h" \
             -output lib${{ matrix.libffis }}-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework
           shasum -a 256 \
             "lib${{ matrix.libffis }}-ios-xcframework/lib${{ matrix.libffis }}_ios.xcframework/Info.plist" \
@@ -305,7 +305,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: lib${{ matrix.libffis }}-ios-xcframework
-          path: libffiss/${{ matrix.libffis }}-ios-xcframework
+          path: libffiss/lib${{ matrix.libffis }}-ios-xcframework
 
   create_release:
     name: Create release for ffi libraries
@@ -322,6 +322,7 @@ jobs:
         shell: bash
         working-directory: libffiss
         run: |
+          ls -alhtR
           find . -name "*.sha256" -type f -print | xargs cat >> libffiss.txt.sha256-verify
           cat libffiss.txt.sha256-verify
           sha256sum -c libffiss.txt.sha256-verify
