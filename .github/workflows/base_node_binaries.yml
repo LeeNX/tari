@@ -168,7 +168,7 @@ jobs:
         run: |
           echo "PLATFORM_SPECIFIC_DIR=osx" >> $GITHUB_ENV
           echo "LIB_EXT=.dylib" >> $GITHUB_ENV
-
+          rustup target add ${{ matrix.builds.target }}
 
       - name: Set environment variables - Ubuntu
         if: startsWith(runner.os,'Linux')
