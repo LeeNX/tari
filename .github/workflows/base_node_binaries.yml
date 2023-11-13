@@ -170,6 +170,7 @@ jobs:
         run: |
           echo "PLATFORM_SPECIFIC_DIR=osx" >> $GITHUB_ENV
           echo "LIB_EXT=.dylib" >> $GITHUB_ENV
+          echo "CC=/usr/bin/cc" >> $GITHUB_ENV
 
       - name: Set environment variables - Ubuntu
         if: startsWith(runner.os,'Linux')
