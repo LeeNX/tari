@@ -47,10 +47,10 @@ jobs:
           #
           # build only single target image
           # matrix_selection=$( jq -c '.[] | select( ."name" == "windows-x64" )' ${{ env.matrix-json-file }} )
-          matrix_selection=$( jq -c '.[] | select( ."name" == "macos-arm64" )' ${{ env.matrix-json-file }} )
+          # matrix_selection=$( jq -c '.[] | select( ."name" == "macos-arm64" )' ${{ env.matrix-json-file }} )
           #
           # buid select target images - build_enabled
-          # matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
+          matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
@@ -134,7 +134,6 @@ jobs:
         run: |
           brew install cmake coreutils automake autoconf
           rustup target add ${{ matrix.builds.target }}
-          #brew install llvm
 
       - name: Install Windows dependencies
         # continue-on-error: true  # WARNING: workaround
@@ -171,7 +170,6 @@ jobs:
         run: |
           echo "PLATFORM_SPECIFIC_DIR=osx" >> $GITHUB_ENV
           echo "LIB_EXT=.dylib" >> $GITHUB_ENV
-          #echo "CC=/usr/bin/cc" >> $GITHUB_ENV
 
       - name: Set environment variables - Ubuntu
         if: startsWith(runner.os,'Linux')
@@ -197,7 +195,7 @@ jobs:
           echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $GITHUB_ENV
           echo "C:\Strawberry\perl\bin" >> $GITHUB_PATH
 
-      # Don't use caches for binary builds. Start from a clean slate.
+      # Don't use caches for binary builds. Start from a clean slate - on release
       - name: Cache cargo files and outputs
         if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
         uses: Swatinem/rust-cache@v2
@@ -224,7 +222,7 @@ jobs:
               ${{ matrix.builds.flags }} --locked
           fi
 
-      - name: Debugging - Upload logs on failures
+      - name: Debugging - Upload target on failure
         if: failure()
         uses: actions/upload-artifact@v3
         with:
