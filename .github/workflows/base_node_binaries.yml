@@ -131,7 +131,9 @@ jobs:
 
       - name: Install macOS dependencies
         if: startsWith(runner.os,'macOS')
-        run: brew install cmake coreutils automake autoconf
+        run: |
+          brew install cmake coreutils automake autoconf
+          rustup target add ${{ matrix.builds.target }}
 
       - name: Install Windows dependencies
         # continue-on-error: true  # WARNING: workaround
@@ -194,6 +196,9 @@ jobs:
           echo "C:\Strawberry\perl\bin" >> $GITHUB_PATH
 
       # Don't use caches for binary builds. Start from a clean slate.
+      - name: Cache cargo files and outputs
+        if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
+        uses: Swatinem/rust-cache@v2
 
       - name: Build rust binaries
         env:
