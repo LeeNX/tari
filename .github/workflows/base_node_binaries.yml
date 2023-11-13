@@ -134,7 +134,7 @@ jobs:
         run: |
           brew install cmake coreutils automake autoconf
           rustup target add ${{ matrix.builds.target }}
-          brew install llvm
+          #brew install llvm
 
       - name: Install Windows dependencies
         # continue-on-error: true  # WARNING: workaround
@@ -171,7 +171,7 @@ jobs:
         run: |
           echo "PLATFORM_SPECIFIC_DIR=osx" >> $GITHUB_ENV
           echo "LIB_EXT=.dylib" >> $GITHUB_ENV
-          echo "CC=/usr/bin/cc" >> $GITHUB_ENV
+          #echo "CC=/usr/bin/cc" >> $GITHUB_ENV
 
       - name: Set environment variables - Ubuntu
         if: startsWith(runner.os,'Linux')
@@ -203,10 +203,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build rust binaries
-        env:
-          CARGO_UNSTABLE_SPARSE_REGISTRY: true
-          RUSTFLAGS: "-C target_cpu=${{ matrix.builds.target_cpu }}"
-          ROARING_ARCH: "${{ matrix.builds.target_cpu }}"
+        # env:
+        #   CARGO_UNSTABLE_SPARSE_REGISTRY: true
+        #   RUSTFLAGS: "-C target_cpu=${{ matrix.builds.target_cpu }}"
+        #   ROARING_ARCH: "${{ matrix.builds.target_cpu }}"
         shell: bash
         run: |
           if [ "${{ matrix.builds.cross }}" != "true" ]; then
