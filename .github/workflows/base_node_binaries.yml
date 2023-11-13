@@ -132,8 +132,9 @@ jobs:
       - name: Install macOS dependencies
         if: startsWith(runner.os,'macOS')
         run: |
-          brew install cmake coreutils automake autoconf llvm
+          brew install cmake coreutils automake autoconf
           rustup target add ${{ matrix.builds.target }}
+          brew install llvm
 
       - name: Install Windows dependencies
         # continue-on-error: true  # WARNING: workaround
