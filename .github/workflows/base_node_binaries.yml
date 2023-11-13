@@ -132,7 +132,7 @@ jobs:
       - name: Install macOS dependencies
         if: startsWith(runner.os,'macOS')
         run: |
-          brew install cmake coreutils automake autoconf
+          brew install cmake coreutils automake autoconf llvm
           rustup target add ${{ matrix.builds.target }}
 
       - name: Install Windows dependencies
@@ -222,6 +222,13 @@ jobs:
               ${{ matrix.builds.target_bins }} \
               ${{ matrix.builds.flags }} --locked
           fi
+
+      - name: Debugging - Upload logs on failures
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.TBN_FILENAME }}-failure-target
+          path: "${{ github.workspace }}/target/*"
 
       - name: Copy binaries to folder for archiving
         shell: bash
@@ -467,7 +474,7 @@ jobs:
           else
             echo "No buildtools/Output."
           fi
-  
+
       - name: Sync dist to S3 - Bash
         continue-on-error: true # Don't break if s3 upload fails
         if: ${{ env.AWS_SECRET_ACCESS_KEY != '' && matrix.builds.runs-on != 'self-hosted' }}
