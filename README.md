@@ -1,4 +1,5 @@
 [![Coverage Status](https://coveralls.io/repos/github/tari-project/tari/badge.svg?branch=development)](https://coveralls.io/github/tari-project/tari?branch=development)
+[![Github All Releases](https://img.shields.io/github/downloads/tari-project/tari/total.svg)]()
 
 # The Tari protocol
 
