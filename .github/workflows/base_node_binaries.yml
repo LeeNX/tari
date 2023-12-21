@@ -50,10 +50,10 @@ jobs:
           #
           # build only single target image
           # matrix_selection=$( jq -c '.[] | select( ."name" == "windows-x64" )' ${{ env.matrix-json-file }} )
-          # matrix_selection=$( jq -c '.[] | select( ."name" == "macos-arm64" )' ${{ env.matrix-json-file }} )
+          matrix_selection=$( jq -c '.[] | select( ."name" == "macos-arm64" )' ${{ env.matrix-json-file }} )
           #
           # buid select target images - build_enabled
-          matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
+          # matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
@@ -199,7 +199,7 @@ jobs:
 
       # Don't use caches for binary builds. Start from a clean slate - on release
       - name: Cache cargo files and outputs
-        if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ ( ! startsWith(github.ref, 'refs/tags/v') ) && ( github.event_name != 'schedule' ) }}
         uses: Swatinem/rust-cache@v2
 
       - name: Install and setup cargo cross
