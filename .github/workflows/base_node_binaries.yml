@@ -350,13 +350,14 @@ jobs:
             xcrun stapler staple -v "${distDirPKG}/${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.VERSION }}.pkg"
           fi
           cd ${distDirPKG}
+          ls -la
           echo "Compute pkg shasum"
           ${SHARUN} "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.VERSION }}.pkg" \
             >> "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.VERSION }}.pkg.sha256"
           cat "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.VERSION }}.pkg.sha256"
           echo "Checksum verification for pkg is "
           ${SHARUN} --check "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.VERSION }}.pkg.sha256"
-          cp -v "*.pkg*" ${{ env.MTS_SOURCE }}
+          cp -v *.pkg* ${{ env.MTS_SOURCE }}
 
       - name: Artifact upload for macOS pkg
         if: startsWith(runner.os,'macOS')
