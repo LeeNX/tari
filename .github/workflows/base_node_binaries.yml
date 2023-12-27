@@ -497,64 +497,39 @@ jobs:
       - name: Sync dist to S3 - Bash
         continue-on-error: true # Don't break if s3 upload fails
         if: ${{ env.AWS_SECRET_ACCESS_KEY != '' && matrix.builds.runs-on != 'self-hosted' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          DEST_DIR: "${{ env.S3DESTOVERRIDE }}${{ env.PLATFORM_SPECIFIC_DIR }}/${{ env.TARI_NETWORK_DIR }}/"
+          S3CMD: "cp"
+          S3OPTIONS: '--recursive --exclude "*" --include "*.zip*" --include "*.pkg*" --include "*.exe*"'
+          # S3OPTIONS: '--acl public-read'
         shell: bash
         run: |
-          echo "Starting upload ... ${{ env.SOURCE }}"
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            echo "No ls for 'D:' on Windows"
-          else
-            ls -al ${{ env.SOURCE }}
-          fi
+          echo "Starting upload ... ${{ env.MTS_SOURCE }}"
+          ls -al ${{ env.MTS_SOURCE }}
 
           aws s3 ${{ env.S3CMD }} --region ${{ secrets.AWS_REGION }} \
-            "${{ env.SOURCE }}" \
+            "${{ env.MTS_SOURCE }}" \
             s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.DEST_DIR }} \
             ${{ env.S3OPTIONS }}
-          echo "Done - $?"
-          exit 0
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SOURCE: "${{ github.workspace }}${{ env.TBN_DIST }}"
-          DEST_DIR: "${{ env.S3DESTOVERRIDE }}${{ env.PLATFORM_SPECIFIC_DIR }}/${{ env.TARI_NETWORK_DIR }}/"
-          S3CMD: "cp"
-          S3OPTIONS: '--recursive --exclude "*" --include "*.zip*" --include "*.pkg*" --include "*.exe*"'
-          # S3OPTIONS: '--acl public-read'
 
-      - name: Copy tags to latest s3 - Bash
-        continue-on-error: true # Don't break if s3 upload fails
-        if: ${{ env.AWS_SECRET_ACCESS_KEY != '' && matrix.builds.runs-on != 'self-hosted' && startsWith(github.ref, 'refs/tags/v') }}
-        shell: bash
-        run: |
-          echo "Starting upload ... ${{ env.SOURCE }}"
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            echo "No ls for 'D:' on Windows"
-          else
-            ls -al ${{ env.SOURCE }}
+          if [[ "${{ github.ref }}" =~ refs\/tags\/v.* ]]; then
+            echo "Copy tags to latest s3"
+            aws s3 ${{ env.S3CMD }} --region ${{ secrets.AWS_REGION }} \
+              "${{ env.MTS_SOURCE }}" \
+              s3://${{ secrets.AWS_S3_BUCKET }}/current/${{ env.DEST_DIR }} \
+              ${{ env.S3OPTIONS }}
+
+            aws s3 rm --region ${{ secrets.AWS_REGION }} \
+              s3://${{ secrets.AWS_S3_BUCKET }}/latest/${{ env.DEST_DIR }}/ \
+              --recursive --include "*"
+
+            aws s3 ${{ env.S3CMD }} --region ${{ secrets.AWS_REGION }} \
+              "${{ env.MTS_SOURCE }}" \
+              s3://${{ secrets.AWS_S3_BUCKET }}/latest/${{ env.DEST_DIR }} \
+              ${{ env.S3OPTIONS }}
           fi
-
-          aws s3 ${{ env.S3CMD }} --region ${{ secrets.AWS_REGION }} \
-            "${{ env.SOURCE }}" \
-            s3://${{ secrets.AWS_S3_BUCKET }}/current/${{ env.DEST_DIR }} \
-            ${{ env.S3OPTIONS }}
-
-          aws s3 rm --region ${{ secrets.AWS_REGION }} \
-            s3://${{ secrets.AWS_S3_BUCKET }}/latest/${{ env.DEST_DIR }}/*
-
-          aws s3 ${{ env.S3CMD }} --region ${{ secrets.AWS_REGION }} \
-            "${{ env.SOURCE }}" \
-            s3://${{ secrets.AWS_S3_BUCKET }}/latest/${{ env.DEST_DIR }} \
-            ${{ env.S3OPTIONS }}
-          echo "Done - $?"
-          exit 0
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          SOURCE: "${{ github.workspace }}${{ env.TBN_DIST }}"
-          DEST_DIR: "${{ env.S3DESTOVERRIDE }}${{ env.PLATFORM_SPECIFIC_DIR }}/${{ env.TARI_NETWORK_DIR }}/"
-          S3CMD: "cp"
-          S3OPTIONS: '--recursive --exclude "*" --include "*.zip*" --include "*.pkg*" --include "*.exe*"'
-          # S3OPTIONS: '--acl public-read'
 
   create-release:
     runs-on: ubuntu-latest
