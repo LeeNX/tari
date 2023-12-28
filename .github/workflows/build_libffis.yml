@@ -172,7 +172,7 @@ jobs:
           ls -alhtR "${{ runner.temp }}/lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}
           path: ${{ runner.temp }}/lib${{ matrix.libffis }}-${{ env.TARGET_PLATFORM }}-${{ env.TARGET_ARCH }}${{ env.TARGET_SIM }}
@@ -194,7 +194,7 @@ jobs:
         run: brew install coreutils
 
       - name: Download iOS libffiss for ${{ matrix.libffis }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           # wildcard downloads not supported yet ( minotari_*_ffi-ios-* )
           # name: ${{ matrix.libffis }}-ios
@@ -247,7 +247,7 @@ jobs:
           ls -alhtR
 
       - name: Upload iOS universal libffis artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lib${{ matrix.libffis }}-ios-universal
           path: libffiss/lib${{ matrix.libffis }}-ios-universal
@@ -299,7 +299,7 @@ jobs:
           ls -alhtR
 
       - name: Upload iOS xcframework libffis artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lib${{ matrix.libffis }}-ios-xcframework
           path: libffiss/lib${{ matrix.libffis }}-ios-xcframework
@@ -311,7 +311,7 @@ jobs:
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - name: Download all ffi libraries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: libffiss
 
