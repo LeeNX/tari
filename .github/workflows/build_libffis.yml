@@ -129,6 +129,18 @@ jobs:
           tempEnv=${tempEnv#*_}
           echo "TARGET_NAME=${tempEnv%_*}" >> $GITHUB_ENV
 
+      - name: Install Linux dependencies - Ubuntu
+        if: ${{ startsWith(runner.os,'Linux') && ( ! matrix.builds.cross ) }}
+        run: |
+          sudo apt-get update
+          sudo bash scripts/install_ubuntu_dependencies.sh
+
+      - name: Install macOS dependencies
+        if: startsWith(runner.os,'macOS')
+        run: |
+          brew install cmake coreutils automake autoconf protobuf
+          rustup target add ${{ matrix.builds.target }}
+
       - name: Setup Rust toolchain
         if: ${{ ! matrix.builds.cross }}
         uses: dtolnay/rust-toolchain@master
