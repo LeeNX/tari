@@ -1,20 +1,62 @@
-[target.x86_64-linux-android]
-image = "ghcr.io/cross-rs/x86_64-linux-android:edge"
-
-[target.x86_64-linux-android.env]
+[build.env]
 passthrough = [
   "CFLAGS",
+  "TARGET_CFLAGS",
+  "RUST_BACKTRACE",
+  "RUST_LOG",
   "TARI_NETWORK",
+  "RUST_DEBUG",
+  "RUSTFLAGS",
+  "ARCH",
+  "FEATURES",
+  "ROARING_ARCH",
+  "TARGET",
+  "RUST_TARGET",
+  "BUILD_TARGET",
+  "CARGO_BUILD_TARGET",
 ]
+
+# CFLAGS=-DMDB_USE_ROBUST=0 -DHAVE___FPENDING
+# Don't forget export CFLAGS=-DMDB_USE_ROBUST=0
+[target.x86_64-linux-android]
+image = "ghcr.io/cross-rs/x86_64-linux-android:edge"
+#  libclang-3.9-dev \
+#  clang-3.9
+#  libclang-dev \
+#  clang \
+#  openssl \
+#  libssl-dev \
+#  cmake \
+pre-build = [ """
+export DEBIAN_FRONTEND=noninteractive && \
+apt-get update && \
+apt-get --assume-yes --no-install-recommends install \
+  libprotobuf-dev \
+  protobuf-compiler
+""" ]
+
+# export CPPFLAGS="-DMDB_USE_ROBUST=0"
+#[target.x86_64-linux-android.env]
+#passthrough = [
+#  "CFLAGS=-DMDB_USE_ROBUST=0",
+#  "MDB_USE_ROBUST",
+#]
 
 [target.aarch64-linux-android]
 image = "ghcr.io/cross-rs/aarch64-linux-android:edge"
+pre-build = [ """
+export DEBIAN_FRONTEND=noninteractive && \
+apt-get update && \
+apt-get --assume-yes --no-install-recommends install \
+  libprotobuf-dev \
+  protobuf-compiler
+""" ]
 
-[target.aarch64-linux-android.env]
-passthrough = [
-  "CFLAGS",
-  "TARI_NETWORK",
-]
+#[target.aarch64-linux-android.env]
+#passthrough = [
+#  "CFLAGS",
+#  "TARI_NETWORK",
+#]
 
 [target.aarch64-unknown-linux-gnu]
 image = "ubuntu:18.04"
