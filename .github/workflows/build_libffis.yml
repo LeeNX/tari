@@ -111,6 +111,7 @@ jobs:
         run: |
           if [[ "${{ matrix.builds.target }}" =~ "android" ]]; then
             echo "CFLAGS=-DMDB_USE_ROBUST=0" >> $GITHUB_ENV
+            echo "LIBGIT2_NO_VENDOR=0" >> $GITHUB_ENV
             echo "TARGET_PLATFORM=android" >> $GITHUB_ENV
           elif [[ "${{ matrix.builds.target }}" =~ "ios" ]]; then
             echo "TARGET_PLATFORM=ios" >> $GITHUB_ENV

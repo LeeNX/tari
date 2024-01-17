@@ -14,10 +14,12 @@ passthrough = [
   "RUST_TARGET",
   "BUILD_TARGET",
   "CARGO_BUILD_TARGET",
+  "LIBGIT2_NO_VENDOR",
 ]
 
 # CFLAGS=-DMDB_USE_ROBUST=0 -DHAVE___FPENDING
 # Don't forget export CFLAGS=-DMDB_USE_ROBUST=0
+# export LIBGIT2_NO_VENDOR=0
 [target.x86_64-linux-android]
 image = "ghcr.io/cross-rs/x86_64-linux-android:edge"
 #  libclang-3.9-dev \
@@ -27,12 +29,12 @@ image = "ghcr.io/cross-rs/x86_64-linux-android:edge"
 #  openssl \
 #  libssl-dev \
 #  cmake \
+#  libgit2-dev \
 pre-build = [ """
 export DEBIAN_FRONTEND=noninteractive && \
 apt-get update && \
 apt-get --assume-yes --no-install-recommends install \
   pkg-config \
-  libgit2-dev \
   libsqlite3-dev \
   libprotobuf-dev \
   protobuf-compiler
