@@ -30,14 +30,18 @@ image = "ghcr.io/cross-rs/x86_64-linux-android:edge"
 #  libssl-dev \
 #  cmake \
 #  libgit2-dev \
+#  pkg-config \
+#  libsqlite3-dev \
+#  libprotobuf-dev \
+#  protobuf-compiler
+#
 pre-build = [ """
 export DEBIAN_FRONTEND=noninteractive && \
 apt-get update && \
 apt-get --assume-yes --no-install-recommends install \
-  pkg-config \
-  libsqlite3-dev \
-  libprotobuf-dev \
-  protobuf-compiler
+ curl unzip && \
+curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.2/protoc-25.2-linux-x86_64.zip && \
+unzip -o protoc-25.2-linux-x86_64.zip -d /usr/
 """ ]
 
 # export CPPFLAGS="-DMDB_USE_ROBUST=0"
