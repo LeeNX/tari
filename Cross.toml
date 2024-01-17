@@ -10,16 +10,14 @@ passthrough = [
   "RUST_BACKTRACE",
   "RUST_DEBUG",
   "RUST_LOG",
-  "TARI_NETWORK",
   "ARCH",
   "FEATURES",
   "ROARING_ARCH",
-  "LIBGIT2_NO_VENDOR",
+  "TARI_NETWORK",
 ]
 
 # Don't forget export:
 #  CFLAGS=-DMDB_USE_ROBUST=0
-#  LIBGIT2_NO_VENDOR=0
 [target.x86_64-linux-android]
 image = "ghcr.io/cross-rs/x86_64-linux-android:edge"
 pre-build = [ """
@@ -77,17 +75,7 @@ rustup toolchain install stable-aarch64-unknown-linux-gnu
 
 [target.aarch64-unknown-linux-gnu.env]
 passthrough = [
-  "CFLAGS",
-  "RUST_DEBUG",
-  "RUSTFLAGS",
-  "ARCH",
-  "FEATURES",
-  "ROARING_ARCH",
-  "TARGET",
-  "RUST_TARGET",
-  "BUILD_TARGET",
   "CARGO_BUILD_TARGET",
   "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
   "BINDGEN_EXTRA_CLANG_ARGS=--sysroot /usr/aarch64-linux-gnu/include/",
-  "TARI_NETWORK",
 ]
