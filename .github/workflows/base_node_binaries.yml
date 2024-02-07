@@ -97,10 +97,13 @@ jobs:
 
       - name: Declare TestNet for tags
         id: set-tari-network
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        # if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          #GHA_NETWORK: ${{ github.ref_name }}
+          GHA_NETWORK: nextnet
         shell: bash
         run: |
-          source buildtools/multinet_envs.sh ${{ github.ref_name }}
+          source buildtools/multinet_envs.sh ${{ env.GHA_NETWORK }}
           echo ${TARI_NETWORK}
           echo ${TARI_NETWORK_DIR}
           echo "TARI_NETWORK=${TARI_NETWORK}" >> $GITHUB_ENV
@@ -276,6 +279,14 @@ jobs:
             cp -v "$GITHUB_WORKSPACE/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" .
           fi
           ls -la ${{ env.MTS_SOURCE }}
+
+      - name: Pre/unsigned OSX Artifact upload for Archive
+        if: startsWith(runner.os,'macOS')
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TBN_FILENAME }}_unsigned-archive-${{ matrix.builds.name }}
+          path: "${{ env.MTS_SOURCE }}/*"
 
       - name: Build the macOS pkg
         if: startsWith(runner.os,'macOS')
