@@ -169,8 +169,11 @@ jobs:
         run: ./scripts/file_license_check.sh
   test:
     name: test
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-11]
+    runs-on: ${{ matrix.os }}
     # runs-on: [self-hosted, ubuntu-high-cpu]
-    runs-on: [ubuntu-latest, macos-14, macos-11]
     permissions:
       checks: write
       pull-requests: write
