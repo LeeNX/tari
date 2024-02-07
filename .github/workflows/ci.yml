@@ -111,7 +111,8 @@ jobs:
     # Runs cargo check with stable toolchain to determine whether the codebase is likely to build
     #  on stable Rust.
     name: cargo check with stable
-    runs-on: [self-hosted, ubuntu-high-cpu]
+    # runs-on: [self-hosted, ubuntu-high-cpu]
+    runs-on: [ubuntu-latest]
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -168,7 +169,8 @@ jobs:
         run: ./scripts/file_license_check.sh
   test:
     name: test
-    runs-on: [self-hosted, ubuntu-high-cpu, macos-14, macos-11]
+    # runs-on: [self-hosted, ubuntu-high-cpu]
+    runs-on: [ubuntu-latest, macos-14, macos-11]
     permissions:
       checks: write
       pull-requests: write
@@ -237,7 +239,7 @@ jobs:
           name: pr_num
           path: ./pr_num.txt
 
-# needed for test results
+  # needed for test results
   event_file:
     name: "Upload Event File for Test Results"
     runs-on: ubuntu-latest
