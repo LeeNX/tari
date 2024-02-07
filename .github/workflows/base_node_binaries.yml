@@ -19,6 +19,7 @@ name: Build Matrix of Binaries
 env:
   TBN_FILENAME: "tari_suite"
   TBN_BUNDLE_ID_BASE: "com.tarilabs.pkg"
+  TBN_SIG_FN: "sha256-unsigned.txt"
   toolchain: nightly-2023-06-04
   matrix-json-file: ".github/workflows/base_node_binaries.json"
   CARGO_HTTP_MULTIPLEXING: false
@@ -100,7 +101,7 @@ jobs:
         id: set-tari-network
         # if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
-          #GHA_NETWORK: ${{ github.ref_name }}
+          # GHA_NETWORK: ${{ github.ref_name }}
           GHA_NETWORK: "v1.0.0-rc.4"
         shell: bash
         run: |
@@ -383,7 +384,7 @@ jobs:
           cat "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.TARI_VERSION }}.pkg.sha256"
           echo "Checksum verification for pkg is "
           ${SHARUN} --check "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.TARI_VERSION }}.pkg.sha256"
-          cp -v *.pkg* ${{ env.MTS_SOURCE }}
+          #cp -v *.pkg* ${{ env.MTS_SOURCE }}
 
       - name: Artifact upload for macOS pkg
         if: startsWith(runner.os,'macOS')
@@ -439,26 +440,6 @@ jobs:
           name: ${{ env.TBN_FILENAME }}_archive-${{ matrix.builds.name }}
           path: "${{ github.workspace }}${{ env.TBN_DIST }}/${{ env.BINFILE }}.zip*"
 
-      - name: Prep Miner for upload
-        shell: bash
-        run: |
-          cd "${{ github.workspace }}${{ env.TBN_DIST }}"
-          cp -v "minotari_miner${{ env.TBN_EXT}}" \
-            "minotari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}"
-          echo "Compute miner shasum"
-          ${SHARUN} "minotari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}" \
-            >> "minotari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}.sha256"
-          echo "Show the shasum"
-          cat "minotari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}.sha256"
-          echo "Checksum verification for miner is "
-          ${SHARUN} --check "minotari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}.sha256"
-
-      - name: Artifact upload for Miner
-        uses: actions/upload-artifact@v4
-        with:
-          name: minotari_miner-${{ matrix.builds.name }}
-          path: "${{ github.workspace }}${{ env.TBN_DIST }}/minotari_miner-${{ matrix.builds.name }}${{ env.TBN_EXT}}*"
-
       - name: Prep diag-utils archive for upload
         continue-on-error: true
         shell: bash
@@ -513,14 +494,14 @@ jobs:
           sudo apt-get update
           sudo apt-get --no-install-recommends --assume-yes install dos2unix
           ls -alhtR
-          if [ -f "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.txt.sha256-unsigned" ] ; then
-            rm -fv "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.txt.sha256-unsigned"
+          if [ -f "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.${{ env.TBN_SIG_FN }}" ] ; then
+            rm -fv "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.${{ env.TBN_SIG_FN }}"
           fi
           # Merge all sha256 files into one
-          find . -name "*.sha256" -type f -print | xargs cat >> "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.txt.sha256-unsigned"
-          dos2unix --quiet "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.txt.sha256-unsigned"
-          cat "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.txt.sha256-unsigned"
-          sha256sum --ignore-missing --check "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.txt.sha256-unsigned"
+          find . -name "*.sha256" -type f -print | xargs cat >> "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.${{ env.TBN_SIG_FN }}"
+          dos2unix --quiet "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.${{ env.TBN_SIG_FN }}"
+          cat "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.${{ env.TBN_SIG_FN }}"
+          sha256sum --ignore-missing --check "${{ env.TBN_FILENAME }}-${{ env.TARI_VERSION }}.${{ env.TBN_SIG_FN }}"
           ls -alhtR
 
       - name: Create release
