@@ -187,7 +187,9 @@ jobs:
 
       # Hardcoded sdk for MacOSX 11 on ARM64
       - name: Set environment variables - macOS - ARM64 (pin/sdk)
-        if: ${{ startsWith(runner.os,'macOS') && matrix.builds.name == 'macos-arm64' }}
+        # Debug
+        if: ${{ false }}
+        # if: ${{ startsWith(runner.os,'macOS') && matrix.builds.name == 'macos-arm64' }}
         run: |
           xcrun --show-sdk-path
           ls -la "/Library/Developer/CommandLineTools/SDKs/"
@@ -219,7 +221,7 @@ jobs:
           echo "C:\Strawberry\perl\bin" >> $GITHUB_PATH
 
       - name: Cache cargo files and outputs
-        if: ${{ ( ! startsWith(github.ref, 'refs/tags/v') ) && ( ! matrix.builds.cross ) && ( ! env.CARGO_CACHE ) }}
+        if: ${{ ( ! startsWith(github.ref, 'refs/tags/v') ) && ( ! matrix.builds.cross ) && ( env.CARGO_CACHE ) }}
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.builds.target }}
@@ -334,7 +336,7 @@ jobs:
             "minotari_merge_mining_proxy"
           )
           for FILE in "${FILES[@]}"; do
-            codesign --options runtime --force --verify --verbose --timestamp \
+            codesign --force --verify --verbose --timestamp \
               --sign "Developer ID Application: $MACOS_APPLICATION_ID" \
               "/tmp/tari_testnet/runtime/$FILE"
             codesign --verify --deep --display --verbose=4 \
