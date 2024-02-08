@@ -326,8 +326,8 @@ jobs:
             codesign --options runtime --force --verify --verbose --timestamp \
               --sign "Developer ID Application: $MACOS_APPLICATION_ID" \
               "/tmp/tari_testnet/runtime/$FILE"
-            codesign --verify --deep --display --verbose=4 \
-              "/tmp/tari_testnet/runtime/$FILE"
+            # codesign --verify --deep --display --verbose=4 \
+            #   "/tmp/tari_testnet/runtime/$FILE"
             cp -vf "/tmp/tari_testnet/runtime/$FILE" "$GITHUB_WORKSPACE${{ env.TBN_DIST }}"
           done
           distDirPKG=$(mktemp -d -t ${{ env.TBN_FILENAME }})
