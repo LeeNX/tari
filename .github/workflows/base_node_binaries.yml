@@ -336,7 +336,7 @@ jobs:
             "minotari_merge_mining_proxy"
           )
           for FILE in "${FILES[@]}"; do
-            codesign --force --verify --verbose --timestamp \
+            codesign --options runtime --force --verify --verbose --timestamp \
               --sign "Developer ID Application: $MACOS_APPLICATION_ID" \
               "/tmp/tari_testnet/runtime/$FILE"
             codesign --verify --deep --display --verbose=4 \
