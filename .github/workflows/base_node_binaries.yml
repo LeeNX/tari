@@ -52,10 +52,10 @@ jobs:
           #
           # build only single target image
           # matrix_selection=$( jq -c '.[] | select( ."name" == "windows-x64" )' ${{ env.matrix-json-file }} )
-          matrix_selection=$( jq -c '.[] | select( ."name" == "macos-arm64" )' ${{ env.matrix-json-file }} )
+          # matrix_selection=$( jq -c '.[] | select( ."name" == "macos-arm64" )' ${{ env.matrix-json-file }} )
           #
           # build select target images - build_enabled
-          # matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
+          matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
@@ -282,6 +282,17 @@ jobs:
           fi
           ls -la ${{ env.MTS_SOURCE }}
 
+      - name: Build minotari_node metrics release binary for linux-x86_64
+        if: ${{ startsWith(runner.os,'Linux') && ( ! matrix.builds.cross ) && matrix.builds.name == 'linux-x86_64' }}
+        shell: bash
+        run: |
+          ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
+            --target ${{ matrix.builds.target }} \
+            --features "${{ matrix.builds.features }}, metrics" \
+            --bin minotari_node \
+            ${{ matrix.builds.flags }} --locked
+          cp -v "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_node" "${{ env.MTS_SOURCE }}/minotari_node-metrics"
+
       - name: Pre/unsigned OSX Artifact upload for Archive
         if: startsWith(runner.os,'macOS')
         continue-on-error: true
@@ -326,8 +337,8 @@ jobs:
             codesign --options runtime --force --verify --verbose --timestamp \
               --sign "Developer ID Application: $MACOS_APPLICATION_ID" \
               "/tmp/tari_testnet/runtime/$FILE"
-            # codesign --verify --deep --display --verbose=4 \
-            #   "/tmp/tari_testnet/runtime/$FILE"
+            codesign --verify --deep --display --verbose=4 \
+              "/tmp/tari_testnet/runtime/$FILE"
             cp -vf "/tmp/tari_testnet/runtime/$FILE" "$GITHUB_WORKSPACE${{ env.TBN_DIST }}"
           done
           distDirPKG=$(mktemp -d -t ${{ env.TBN_FILENAME }})
