@@ -332,11 +332,11 @@ jobs:
           export tarball_source="${{ env.TARI_NETWORK_DIR }}"
           ./create_osx_install_zip.sh unused nozip
           ARRAY_FILES=( $(echo ${TBN_FILES} | jq -r '.[]') )
-          find "${target_release}" \
+          find "${GITHUB_WORKSPACE}/${target_release}" \
             -name "randomx-*" -type f -perm -+x \
             -exec cp -vf {} "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/runtime/" \;
           FILES_DIAG_UTILS=( \
-            $(find "${target_release}" \
+            $(find "${GITHUB_WORKSPACE}/${target_release}" \
                 -name "randomx-*" -type f -perm -+x \
                   -exec sh -c 'echo "$(basename "{}")"' \; \
               ) \
