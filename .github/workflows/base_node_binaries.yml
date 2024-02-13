@@ -325,7 +325,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $MACOS_KEYCHAIN_PASS build.keychain
           cd buildtools
           export target_release="$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release"
-          ls -alhtR "${{ runner.temp }}"
+          ls -alht "${{ runner.temp }}"
           mkdir -p "${{ runner.temp }}/osxpkg"
           ls -alhtR "${{ runner.temp }}/osxpkg"
           export tarball_parent="${{ runner.temp }}/osxpkg"
@@ -335,10 +335,12 @@ jobs:
           find "${target_release}" \
             -name "randomx-*" -type f -perm -+x \
             -exec cp -vf {} "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/runtime/" \;
-          readarray -d '' FILES_DIAG_UTILS < <( \
-            find "${target_release}" \
-              -name "randomx-*" -type f -perm -+x \
-                -exec sh -c 'echo "$(basename "{}")"' \; )
+          FILES_DIAG_UTILS=( \
+            $(find "${target_release}" \
+                -name "randomx-*" -type f -perm -+x \
+                  -exec sh -c 'echo "$(basename "{}")"' \; \
+              ) \
+          )
           ARRAY_FILES+=(${FILES_DIAG_UTILS[@]})
           for FILE in "${ARRAY_FILES[@]}"; do
             codesign --options runtime --force --verify --verbose --timestamp \
