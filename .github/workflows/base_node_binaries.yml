@@ -325,7 +325,9 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $MACOS_KEYCHAIN_PASS build.keychain
           cd buildtools
           export target_release="$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release"
-          # mkdir -p "${{ runner.temp }}/osxpkg"
+          ls -alhtR "${{ runner.temp }}""
+          mkdir -p "${{ runner.temp }}/osxpkg"
+          ls -alhtR "${{ runner.temp }}/osxpkg"
           export tarball_parent="${{ runner.temp }}/osxpkg"
           export tarball_source="${{ env.TARI_NETWORK_DIR }}"
           ./create_osx_install_zip.sh unused nozip
