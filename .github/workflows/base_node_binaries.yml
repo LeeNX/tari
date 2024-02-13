@@ -18,8 +18,10 @@ name: Build Matrix of Binaries
 
 env:
   TBN_FILENAME: "tari_suite"
-  TBN_BUNDLE_ID_BASE: "com.tarilabs.pkg"
+  TBN_BUNDLE_ID_BASE: "com.tarilabs"
   TBN_SIG_FN: "sha256-unsigned.txt"
+  ## Must be a JSon string
+  TBN_FILES: '["minotari_node","minotari_console_wallet","minotari_miner","minotari_merge_mining_proxy"]'
   toolchain: nightly-2023-06-04
   matrix-json-file: ".github/workflows/base_node_binaries.json"
   CARGO_HTTP_MULTIPLEXING: false
@@ -268,13 +270,8 @@ jobs:
           echo "Copying files for ${BINFILE} to $(pwd)"
           echo "MTS_SOURCE=$(pwd)" >> $GITHUB_ENV
           ls -la "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/"
-          FILES=(
-            "minotari_node"
-            "minotari_console_wallet"
-            "minotari_miner"
-            "minotari_merge_mining_proxy"
-          )
-          for FILE in "${FILES[@]}"; do
+          ARRAY_FILES=( $(echo ${TBN_FILES} | jq -r '.[]') )
+          for FILE in "${ARRAY_FILES[@]}"; do
             if [ -f "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/${FILE}${TBN_EXT}" ]; then
               cp -v "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/${FILE}${TBN_EXT}" .
             fi
@@ -327,21 +324,29 @@ jobs:
           security import installer.p12 -k build.keychain -P $MACOS_INSTALLER_PASS -T /usr/bin/pkgbuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $MACOS_KEYCHAIN_PASS build.keychain
           cd buildtools
-          export target_release="target/${{ matrix.builds.target }}/release"
+          export target_release="$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release"
+          # mkdir -p "${{ runner.temp }}/osxpkg"
+          export tarball_parent="${{ runner.temp }}/osxpkg"
+          export tarball_source="${{ env.TARI_NETWORK_DIR }}"
           ./create_osx_install_zip.sh unused nozip
-          FILES=(
-            "minotari_node"
-            "minotari_console_wallet"
-            "minotari_miner"
-            "minotari_merge_mining_proxy"
-          )
-          for FILE in "${FILES[@]}"; do
-            codesign --options runtime --force --verify --deep --verbose --timestamp \
+          ARRAY_FILES=( $(echo ${TBN_FILES} | jq -r '.[]') )
+          find "${target_release}" \
+            -name "randomx-*" -type f -perm -+x \
+            -exec cp -vf {} "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/runtime/" \;
+          readarray -d '' FILES_DIAG_UTILS < <( \
+            find "${target_release}" \
+              -name "randomx-*" -type f -perm -+x \
+                -exec sh -c 'echo "$(basename "{}")"' \; )
+          ARRAY_FILES+=(${FILES_DIAG_UTILS[@]})
+          for FILE in "${ARRAY_FILES[@]}"; do
+            codesign --options runtime --force --verify --verbose --timestamp \
+              --prefix "${{ env.TBN_BUNDLE_ID_BASE }}.${{ env.TBN_FILENAME }}." \
               --sign "Developer ID Application: $MACOS_APPLICATION_ID" \
-              "/tmp/tari_testnet/runtime/$FILE"
+              "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/runtime/$FILE"
             codesign --verify --deep --display --verbose=4 \
-              "/tmp/tari_testnet/runtime/$FILE"
-            cp -vf "/tmp/tari_testnet/runtime/$FILE" "$GITHUB_WORKSPACE${{ env.TBN_DIST }}"
+              "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/runtime/$FILE"
+            cp -vf "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/runtime/$FILE" \
+              "$GITHUB_WORKSPACE${{ env.TBN_DIST }}"
           done
           distDirPKG=$(mktemp -d -t ${{ env.TBN_FILENAME }})
           echo "${distDirPKG}"
@@ -350,16 +355,16 @@ jobs:
           TBN_BUNDLE_ID_VALID_NAME=$(echo "${TBN_Temp//_/-}")
           # Strip apple-darwin
           TBN_ARCH=$(echo "${${{ matrix.builds.target }}//-apple-darwin/}")
-          pkgbuild --root /tmp/tari_testnet \
-            --identifier "${{ env.TBN_BUNDLE_ID_BASE }}.${TBN_BUNDLE_ID_VALID_NAME}" \
+          pkgbuild --root "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}" \
+            --identifier "${{ env.TBN_BUNDLE_ID_BASE }}.pkg.${TBN_BUNDLE_ID_VALID_NAME}" \
             --version "${TARI_VERSION}" \
             --install-location "/tmp/tari" \
-            --scripts "/tmp/tari_testnet/scripts" \
+            --scripts "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/scripts" \
             --sign "Developer ID Installer: ${MACOS_INSTALLER_ID}" \
             "${distDirPKG}/${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.TARI_VERSION }}.pkg"
           echo -e "Submitting to Apple...\n\n"
           xcrun altool --notarize-app \
-            --primary-bundle-id "${{ env.TBN_BUNDLE_ID_BASE }}.${TBN_BUNDLE_ID_VALID_NAME}" \
+            --primary-bundle-id "${{ env.TBN_BUNDLE_ID_BASE }}.pkg.${TBN_BUNDLE_ID_VALID_NAME}" \
             --username "${MACOS_NOTARIZE_USERNAME}" --password "${MACOS_NOTARIZE_PASSWORD}" \
             --asc-provider "${MACOS_ASC_PROVIDER}" \
             --file "${distDirPKG}/${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.TARI_VERSION }}.pkg" &> notarisation.result
@@ -454,6 +459,7 @@ jobs:
           path: "${{ github.workspace }}${{ env.TBN_DIST }}/${{ env.BINFILE }}.zip*"
 
       - name: Prep diag-utils archive for upload
+        if: ${{ ! startsWith(runner.os,'macOS') }}
         continue-on-error: true
         shell: bash
         run: |
@@ -477,6 +483,7 @@ jobs:
           ${SHARUN} --check "${{ env.TBN_FILENAME }}_archive-diag-utils-${{ matrix.builds.name }}.zip.sha256"
 
       - name: Artifact upload for diag-utils
+        if: ${{ ! startsWith(runner.os,'macOS') }}
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
