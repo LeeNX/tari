@@ -323,6 +323,10 @@ jobs:
           security import application.p12 -k build.keychain -P $MACOS_APPLICATION_PASS -T /usr/bin/codesign
           security import installer.p12 -k build.keychain -P $MACOS_INSTALLER_PASS -T /usr/bin/pkgbuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $MACOS_KEYCHAIN_PASS build.keychain
+          if [[ "${{ matrix.builds.name }}" == "macos-arm64" ]]; then
+            echo "Add codesign extra args"
+            OSX_CODESIGN_EXTRAS="--entitlements ${GITHUB_WORKSPACE}/applications/minotari_node/osx-pkg/entitlements.xml"
+          fi
           cd buildtools
           export target_release="target/${{ matrix.builds.target }}/release"
           ls -alht "${{ runner.temp }}"
@@ -343,7 +347,7 @@ jobs:
           )
           ARRAY_FILES+=(${FILES_DIAG_UTILS[@]})
           for FILE in "${ARRAY_FILES[@]}"; do
-            codesign --options runtime --force --verify --verbose --timestamp \
+            codesign --options runtime --force --verify --verbose --timestamp ${OSX_CODESIGN_EXTRAS} \
               --prefix "${{ env.TBN_BUNDLE_ID_BASE }}.${{ env.TBN_FILENAME }}." \
               --sign "Developer ID Application: $MACOS_APPLICATION_ID" \
               "${{ runner.temp }}/osxpkg/${{ env.TARI_NETWORK_DIR }}/runtime/$FILE"
