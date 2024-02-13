@@ -324,7 +324,7 @@ jobs:
           security import installer.p12 -k build.keychain -P $MACOS_INSTALLER_PASS -T /usr/bin/pkgbuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $MACOS_KEYCHAIN_PASS build.keychain
           cd buildtools
-          export target_release="$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release"
+          export target_release="target/${{ matrix.builds.target }}/release"
           ls -alht "${{ runner.temp }}"
           mkdir -p "${{ runner.temp }}/osxpkg"
           ls -alhtR "${{ runner.temp }}/osxpkg"
