@@ -29,7 +29,7 @@ env:
   CARGO: cargo
   # CARGO_OPTIONS: "--verbose"
   CARGO_OPTIONS: "--release"
-  CARGO_CACHE: false
+  CARGO_CACHE: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -326,7 +326,7 @@ jobs:
           security import installer.p12 -k build.keychain -P $MACOS_INSTALLER_PASS -T /usr/bin/pkgbuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k $MACOS_KEYCHAIN_PASS build.keychain
           if [[ "${{ matrix.builds.name }}" == "macos-arm64" ]]; then
-            echo "Add codesign extra args"
+            echo "Add codesign extra args for ${{ matrix.builds.name }}"
             OSX_CODESIGN_EXTRAS="--entitlements ${GITHUB_WORKSPACE}/applications/minotari_node/osx-pkg/entitlements.xml"
           fi
           cd buildtools
@@ -410,7 +410,6 @@ jobs:
           cat "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.TARI_VERSION }}.pkg.sha256"
           echo "Checksum verification for pkg is "
           ${SHARUN} --check "${{ env.TBN_FILENAME }}-${{ matrix.builds.name }}-${{ env.TARI_VERSION }}.pkg.sha256"
-          #cp -v *.pkg* ${{ env.MTS_SOURCE }}
 
       - name: Artifact upload for macOS pkg
         if: startsWith(runner.os,'macOS')
