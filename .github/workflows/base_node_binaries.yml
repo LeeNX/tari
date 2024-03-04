@@ -131,7 +131,7 @@ jobs:
           else
             ARRAY_BINS=( $(echo "${{ matrix.builds.target_bins }}" | tr ', ' '\n') )
           fi
-          for BIN_FILE in "${ARRAY_BIN[@]}"; do
+          for BIN_FILE in "${ARRAY_BINS[@]}"; do
             echo "Adding ${BIN_FILE} to Builds"
             TARGET_BINS+=" --bin ${BIN_FILE}"
           done
