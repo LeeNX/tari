@@ -133,7 +133,7 @@ jobs:
           fi
           for BIN_FILE in "${ARRAY_BINS[@]}"; do
             echo "Adding ${BIN_FILE} to Builds"
-            TARGET_BINS+=" --bin ${BIN_FILE}"
+            TARGET_BINS+="--bin ${BIN_FILE} "
           done
           echo "TARGET_BINS=${TARGET_BINS}" >> $GITHUB_ENV
 
