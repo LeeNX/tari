@@ -54,10 +54,10 @@ jobs:
           #
           # build only single target image
           # matrix_selection=$( jq -c '.[] | select( ."name" == "windows-x64" )' ${{ env.matrix-json-file }} )
-          matrix_selection=$( jq -c '.[] | select( ."name" | contains("linux") )' ${{ env.matrix-json-file }} )
+          # matrix_selection=$( jq -c '.[] | select( ."name" | contains("linux") )' ${{ env.matrix-json-file }} )
           #
           # build select target images - build_enabled
-          # matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
+          matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
           # Setup the json build matrix
           matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
@@ -296,7 +296,7 @@ jobs:
           cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_node" "${{ env.MTS_SOURCE }}/minotari_node-metrics"
 
       - name: Build targeted miners
-        # if: ${{ startsWith(runner.os,'Linux') && ( ! matrix.builds.cross ) && matrix.builds.miner_cpu_targets != '' }}
+        if: ${{ matrix.builds.miner_cpu_targets != '' }}
         shell: bash
         run: |
           ARRAY_TARGETS=( $(echo "${{ matrix.builds.miner_cpu_targets }}" | tr ', ' '\n') )
