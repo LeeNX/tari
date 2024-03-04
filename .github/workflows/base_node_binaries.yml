@@ -296,10 +296,10 @@ jobs:
           cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_node" "${{ env.MTS_SOURCE }}/minotari_node-metrics"
 
       - name: Build targeted miners
-        # if: ${{ startsWith(runner.os,'Linux') && ( ! matrix.builds.cross ) && matrix.miner_cpu_targets != '' }}
+        # if: ${{ startsWith(runner.os,'Linux') && ( ! matrix.builds.cross ) && matrix.builds.miner_cpu_targets != '' }}
         shell: bash
         run: |
-          ARRAY_TARGETS=( $(echo "${{ matrix.miner_cpu_targets }}" | tr ', ' '\n') )
+          ARRAY_TARGETS=( $(echo "${{ matrix.builds.miner_cpu_targets }}" | tr ', ' '\n') )
           for CPU_TARGET in "${ARRAY_TARGETS[@]}"; do
             echo "Target CPU is ${CPU_TARGET}"
             export RUSTFLAGS="-C target-cpu=${CPU_TARGET}"
