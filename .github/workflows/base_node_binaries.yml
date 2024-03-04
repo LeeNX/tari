@@ -125,6 +125,17 @@ jobs:
           TARI_VERSION=$(awk -F ' = ' '$1 ~ /version/ { gsub(/["]/, "", $2); printf("%s",$2) }' "$GITHUB_WORKSPACE/applications/minotari_node/Cargo.toml")
           echo "TARI_VERSION=${TARI_VERSION}" >> $GITHUB_ENV
           echo "TARI_VERSION=${TARI_VERSION}" >> $GITHUB_OUTPUT
+          TARGET_BINS=""
+          if [[ "${{ matrix.builds.target_bins }}" == "" ]]; then
+            ARRAY_BINS=( $(echo ${TBN_FILES} | jq --raw-output '.[]' | awk '{ print $1 }') )
+          else
+            ARRAY_BINS=( $(echo "${{ matrix.builds.target_bins }}" | tr ', ' '\n') )
+          fi
+          for BIN_FILE in "${ARRAY_BIN[@]}"; do
+            echo "Adding ${BIN_FILE} to Builds"
+            TARGET_BINS+=" --bin ${BIN_FILE}"
+          done
+          echo "TARGET_BINS=${TARGET_BINS}" >> $GITHUB_ENV
 
       - name: Scheduled Destination Folder Override
         if: ${{ github.event_name == 'schedule' && github.event.schedule == '05 00 * * *' }}
@@ -259,7 +270,7 @@ jobs:
           ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
             --target ${{ matrix.builds.target }} \
             --features "${{ matrix.builds.features }}" \
-            ${{ matrix.builds.target_bins }} \
+            ${{ env.TARGET_BINS }} \
             ${{ matrix.builds.flags }} --locked
 
       - name: Copy binaries to folder for archiving
@@ -296,12 +307,13 @@ jobs:
           cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_node" "${{ env.MTS_SOURCE }}/minotari_node-metrics"
 
       - name: Build targeted miners
+        # if: ${{ ( startsWith(github.ref, 'refs/tags/v') ) && ( matrix.builds.miner_cpu_targets != '' ) }}
         if: ${{ matrix.builds.miner_cpu_targets != '' }}
         shell: bash
         run: |
           ARRAY_TARGETS=( $(echo "${{ matrix.builds.miner_cpu_targets }}" | tr ', ' '\n') )
           for CPU_TARGET in "${ARRAY_TARGETS[@]}"; do
-            echo "Target CPU is ${CPU_TARGET}"
+            echo "Target CPU ${CPU_TARGET} for miner"
             export RUSTFLAGS="-C target-cpu=${CPU_TARGET}"
             ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
               --target ${{ matrix.builds.target }} \
