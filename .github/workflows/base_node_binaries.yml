@@ -22,6 +22,7 @@ env:
   TBN_SIG_FN: "sha256-unsigned.txt"
   ## Must be a JSon string
   TBN_FILES: '["minotari_node","minotari_console_wallet","minotari_miner","minotari_merge_mining_proxy"]'
+  TBN_FEATURES: "default, safe"
   TARI_NETWORK_DIR: testnet
   toolchain: nightly-2023-06-04
   matrix-json-file: ".github/workflows/base_node_binaries.json"
@@ -125,6 +126,11 @@ jobs:
           TARI_VERSION=$(awk -F ' = ' '$1 ~ /version/ { gsub(/["]/, "", $2); printf("%s",$2) }' "$GITHUB_WORKSPACE/applications/minotari_node/Cargo.toml")
           echo "TARI_VERSION=${TARI_VERSION}" >> $GITHUB_ENV
           echo "TARI_VERSION=${TARI_VERSION}" >> $GITHUB_OUTPUT
+          if [[ "${{ matrix.builds.features }}" == "" ]]; then
+            echo "build_features=${{ env.TBN_FEATURES }}" >> $GITHUB_ENV
+          else
+            echo "build_features=${{ matrix.builds.features }}" >> $GITHUB_ENV
+          fi
           TARGET_BINS=""
           if [[ "${{ matrix.builds.target_bins }}" == "" ]]; then
             ARRAY_BINS=( $(echo ${TBN_FILES} | jq --raw-output '.[]' | awk '{ print $1 }') )
@@ -269,7 +275,7 @@ jobs:
         run: |
           ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
             --target ${{ matrix.builds.target }} \
-            --features "${{ matrix.builds.features }}" \
+            --features "${{ env.build_features }}" \
             ${{ env.TARGET_BINS }} \
             ${{ matrix.builds.flags }} --locked
 
@@ -301,7 +307,7 @@ jobs:
         run: |
           ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
             --target ${{ matrix.builds.target }} \
-            --features "${{ matrix.builds.features }}, metrics" \
+            --features "${{ env.build_features }}, metrics" \
             --bin minotari_node \
             ${{ matrix.builds.flags }} --locked
           cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_node" "${{ env.MTS_SOURCE }}/minotari_node-metrics"
@@ -317,7 +323,7 @@ jobs:
             export RUSTFLAGS="-C target-cpu=${CPU_TARGET}"
             ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
               --target ${{ matrix.builds.target }} \
-              --features "${{ matrix.builds.features }}" \
+              --features "${{ env.build_features }}" \
               --bin minotari_miner \
               ${{ matrix.builds.flags }} --locked
             cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_miner" "${{ env.MTS_SOURCE }}/minotari_miner-${CPU_TARGET}"
