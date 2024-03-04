@@ -21,8 +21,9 @@
     "runs-on": "ubuntu-latest",
     "rust": "stable",
     "target": "riscv64gc-unknown-linux-gnu",
-    "cross": false,
-    "flags": "--workspace --exclude minotari_mining_helper_ffi --exclude tari_integration_tests"
+    "cross": true,
+    "flags": "--workspace --exclude minotari_mining_helper_ffi --exclude tari_integration_tests",
+    "build_enabled": false
   },
   {
     "name": "macos-x86_64",

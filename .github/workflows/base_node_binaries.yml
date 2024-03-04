@@ -127,9 +127,9 @@ jobs:
           echo "TARI_VERSION=${TARI_VERSION}" >> $GITHUB_ENV
           echo "TARI_VERSION=${TARI_VERSION}" >> $GITHUB_OUTPUT
           if [[ "${{ matrix.builds.features }}" == "" ]]; then
-            echo "build_features=${{ env.TBN_FEATURES }}" >> $GITHUB_ENV
+            echo "BUILD_FEATURES=${{ env.TBN_FEATURES }}" >> $GITHUB_ENV
           else
-            echo "build_features=${{ matrix.builds.features }}" >> $GITHUB_ENV
+            echo "BUILD_FEATURES=${{ matrix.builds.features }}" >> $GITHUB_ENV
           fi
           TARGET_BINS=""
           if [[ "${{ matrix.builds.target_bins }}" == "" ]]; then
@@ -275,7 +275,7 @@ jobs:
         run: |
           ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
             --target ${{ matrix.builds.target }} \
-            --features "${{ env.build_features }}" \
+            --features "${{ env.BUILD_FEATURES }}" \
             ${{ env.TARGET_BINS }} \
             ${{ matrix.builds.flags }} --locked
 
@@ -307,7 +307,7 @@ jobs:
         run: |
           ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
             --target ${{ matrix.builds.target }} \
-            --features "${{ env.build_features }}, metrics" \
+            --features "${{ env.BUILD_FEATURES }}, metrics" \
             --bin minotari_node \
             ${{ matrix.builds.flags }} --locked
           cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_node" "${{ env.MTS_SOURCE }}/minotari_node-metrics"
@@ -323,7 +323,7 @@ jobs:
             export RUSTFLAGS="-C target-cpu=${CPU_TARGET}"
             ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
               --target ${{ matrix.builds.target }} \
-              --features "${{ env.build_features }}" \
+              --features "${{ env.BUILD_FEATURES }}" \
               --bin minotari_miner \
               ${{ matrix.builds.flags }} --locked
             cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/minotari_miner" "${{ env.MTS_SOURCE }}/minotari_miner-${CPU_TARGET}"
