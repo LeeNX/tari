@@ -302,6 +302,7 @@ jobs:
       - name: Copy binaries to folder for archiving
         shell: bash
         run: |
+          set -xo pipefail
           mkdir -p "$GITHUB_WORKSPACE${TBN_DIST}"
           cd "$GITHUB_WORKSPACE${TBN_DIST}"
           BINFILE="${TBN_FILENAME}-${TARI_VERSION}-${VSHA_SHORT}-${{ matrix.builds.name }}${TBN_EXT}"
@@ -316,9 +317,9 @@ jobs:
               cp -vf "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/${FILE}${TBN_EXT}" .
             fi
           done
-          if [ -f ${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/*${LIB_EXT} ]; then
-            cp -vf ${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/*${LIB_EXT} .
-          fi
+          find "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/" \
+            -name "*${LIB_EXT}" -type f -maxdepth 1 \
+            -exec cp -vf {} . \;
           if [ -f "${GITHUB_WORKSPACE}/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" ]; then
             cp -vf "${GITHUB_WORKSPACE}/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" .
           fi
