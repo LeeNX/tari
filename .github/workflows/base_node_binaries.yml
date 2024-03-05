@@ -145,7 +145,7 @@ jobs:
           echo "TARGET_BINS=${TARGET_BINS}" >> $GITHUB_ENV
           TARGET_LIBS=""
           if [[ "${{ matrix.builds.target_libs }}" == "" ]]; then
-            ARRAY_LIBS=( $(echo ${TBN_LIBRARIES} | jq --raw-output '.[]' | awk '{ print $1 }') )
+            ARRAY_LIBS=( $(echo ${TBN_LIBRARIES} | tr ', ' '\n') )
           else
             ARRAY_LIBS=( $(echo "${{ matrix.builds.target_libs }}" | tr ', ' '\n') )
           fi
