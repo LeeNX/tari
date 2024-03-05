@@ -324,8 +324,8 @@ jobs:
           fi
           for FILE in "${ARRAY_LIBS[@]}"; do
             echo "checking for file - ${FILE}${TBN_EXT}"
-            if [ -f "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/${FILE}${LIB_EXT}" ]; then
-              cp -vf "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/${FILE}${LIB_EXT}" .
+            if [ -f "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/lib${FILE}${LIB_EXT}" ]; then
+              cp -vf "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/lib${FILE}${LIB_EXT}" .
             fi
           done
           if [ -f "${GITHUB_WORKSPACE}/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" ]; then
