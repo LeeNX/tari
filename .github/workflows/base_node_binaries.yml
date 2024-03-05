@@ -317,9 +317,17 @@ jobs:
               cp -vf "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/${FILE}${TBN_EXT}" .
             fi
           done
-          find "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/" \
-            -name "*${LIB_EXT}" -type f -maxdepth 1 \
-            -exec cp -vf {} . \;
+          if [[ "${{ matrix.builds.target_libs }}" == "" ]]; then
+            ARRAY_LIBS=( $(echo ${TBN_LIBRARIES} | tr ', ' '\n') )
+          else
+            ARRAY_LIBS=( $(echo "${{ matrix.builds.target_libs }}" | tr ', ' '\n') )
+          fi
+          for FILE in "${ARRAY_LIBS[@]}"; do
+            echo "checking for file - ${FILE}${TBN_EXT}"
+            if [ -f "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/${FILE}${LIB_EXT}" ]; then
+              cp -vf "${GITHUB_WORKSPACE}/target/${{ matrix.builds.target }}/release/${FILE}${LIB_EXT}" .
+            fi
+          done
           if [ -f "${GITHUB_WORKSPACE}/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" ]; then
             cp -vf "${GITHUB_WORKSPACE}/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" .
           fi
