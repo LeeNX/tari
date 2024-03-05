@@ -23,6 +23,7 @@ env:
   ## Must be a JSon string
   TBN_FILES: '["minotari_node","minotari_console_wallet","minotari_miner","minotari_merge_mining_proxy"]'
   TBN_FEATURES: "default, safe"
+  TBN_LIBRARIES: "minotari_mining_helper_ffi"
   TARI_NETWORK_DIR: testnet
   toolchain: nightly-2023-06-04
   matrix-json-file: ".github/workflows/base_node_binaries.json"
@@ -142,6 +143,17 @@ jobs:
             TARGET_BINS+="--bin ${BIN_FILE} "
           done
           echo "TARGET_BINS=${TARGET_BINS}" >> $GITHUB_ENV
+          TARGET_LIBS=""
+          if [[ "${{ matrix.builds.target_libs }}" == "" ]]; then
+            ARRAY_LIBS=( $(echo ${TBN_LIBRARIES} | jq --raw-output '.[]' | awk '{ print $1 }') )
+          else
+            ARRAY_LIBS=( $(echo "${{ matrix.builds.target_libs }}" | tr ', ' '\n') )
+          fi
+          for LIB_FILE in "${ARRAY_LIBS[@]}"; do
+            echo "Adding ${LIB_FILE} to library Builds"
+            TARGET_LIBS+="--package ${LIB_FILE} "
+          done
+          echo "TARGET_LIBS=${TARGET_LIBS}" >> $GITHUB_ENV
 
       - name: Scheduled Destination Folder Override
         if: ${{ github.event_name == 'schedule' && github.event.schedule == '05 00 * * *' }}
@@ -279,6 +291,15 @@ jobs:
             ${{ env.TARGET_BINS }} \
             ${{ matrix.builds.flags }} --locked
 
+      - name: Build release libraries
+        shell: bash
+        run: |
+          ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
+            --target ${{ matrix.builds.target }} \
+            --features "${{ env.BUILD_FEATURES }}" \
+            --lib ${{ env.TARGET_LIBS }} \
+            ${{ matrix.builds.flags }} --locked
+
       - name: Copy binaries to folder for archiving
         shell: bash
         run: |
@@ -296,6 +317,9 @@ jobs:
               cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/${FILE}${TBN_EXT}" .
             fi
           done
+          if [ -f "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/*${LIB_EXT}" ]; then
+            cp -vf "$GITHUB_WORKSPACE/target/${{ matrix.builds.target }}/release/*${LIB_EXT}" .
+          fi
           if [ -f "$GITHUB_WORKSPACE/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" ]; then
             cp -vf "$GITHUB_WORKSPACE/applications/minotari_node/${PLATFORM_SPECIFIC_DIR}/runtime/start_tor${SHELL_EXT}" .
           fi
