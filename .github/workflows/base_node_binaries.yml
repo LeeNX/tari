@@ -296,7 +296,6 @@ jobs:
         run: |
           ${{ env.CARGO }} build ${{ env.CARGO_OPTIONS }} \
             --target ${{ matrix.builds.target }} \
-            --features "${{ env.BUILD_FEATURES }}" \
             --lib ${{ env.TARGET_LIBS }} \
             ${{ matrix.builds.flags }} --locked
 
