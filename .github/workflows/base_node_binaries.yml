@@ -107,6 +107,7 @@ jobs:
 
       - name: Declare TestNet for tags
         id: set-tari-network
+        # Don't forget to comment out the below if, when force testing with GHA_NETWORK
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           GHA_NETWORK: ${{ github.ref_name }}
