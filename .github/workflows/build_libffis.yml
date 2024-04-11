@@ -37,12 +37,11 @@ jobs:
         id: set-matrix
         run: |
           ## build all targets images
-          # matrix=$( jq -s -c .[] .github/workflows/build_libffis_workflow.json )
-          # matrix=$( jq -s -c .[] ${{ env.matrix-json-file }} )
+          matrix=$( jq -s -c .[] ${{ env.matrix-json-file }} )
           #
           ## build only single target image
           # matrix_selection=$( jq -c '.[] | select( ."runs-on" == "macos-latest" )' ${{ env.matrix-json-file }} )
-          matrix_selection=$( jq -c '.[] | select( ."target" | contains("android") )' ${{ env.matrix-json-file }} )
+          # matrix_selection=$( jq -c '.[] | select( ."target" | contains("android") )' ${{ env.matrix-json-file }} )
           #
           ## buid select target images - build_enabled
           # matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
@@ -51,7 +50,7 @@ jobs:
           # matrix=$(echo ${matrix_selection} | jq -s -c)
           #
           ## Setup the json build matrix
-          matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
+          # matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
           #
           echo $matrix
           echo $matrix | jq .
@@ -194,6 +193,8 @@ jobs:
     runs-on: macos-latest
     needs: [matrix-prep, builds]
     continue-on-error: true
+    # Debug matrix
+    if: ${{ false }}
 
     strategy:
       fail-fast: false
