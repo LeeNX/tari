@@ -58,7 +58,7 @@ jobs:
 
   matrix-check:
     # Debug matrix
-    if: ${{ false }}
+    #if: ${{ false }}
     runs-on: ubuntu-latest
     needs: matrix-prep
     steps:
