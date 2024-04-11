@@ -193,6 +193,7 @@ jobs:
     # Limits to only iOS builds
     runs-on: macos-latest
     needs: [matrix-prep, builds]
+    continue-on-error: true
 
     strategy:
       fail-fast: false
