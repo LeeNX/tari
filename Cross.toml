@@ -5,6 +5,8 @@ image = "ghcr.io/cross-rs/x86_64-linux-android:edge"
 passthrough = [
   "CFLAGS",
   "TARI_NETWORK",
+  "TARI_TARGET_NETWORK",
+  "TARI_NETWORK_DIR",
 ]
 
 [target.aarch64-linux-android]
@@ -14,6 +16,8 @@ image = "ghcr.io/cross-rs/aarch64-linux-android:edge"
 passthrough = [
   "CFLAGS",
   "TARI_NETWORK",
+  "TARI_TARGET_NETWORK",
+  "TARI_NETWORK_DIR",
 ]
 
 [target.aarch64-unknown-linux-gnu]
@@ -62,4 +66,6 @@ passthrough = [
   "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc",
   "BINDGEN_EXTRA_CLANG_ARGS=--sysroot /usr/aarch64-linux-gnu/include/",
   "TARI_NETWORK",
+  "TARI_TARGET_NETWORK",
+  "TARI_NETWORK_DIR",
 ]
