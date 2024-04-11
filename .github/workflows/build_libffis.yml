@@ -51,7 +51,7 @@ jobs:
           # matrix=$(echo ${matrix_selection} | jq -s -c)
           #
           ## Setup the json build matrix
-          # matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
+          matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
           #
           echo "matrix=${matrix}" >> $GITHUB_OUTPUT
           echo "libffiss=${BUILD_LIBFFIS}" >> $GITHUB_OUTPUT
