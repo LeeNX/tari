@@ -47,7 +47,7 @@ jobs:
           # matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
           ## Setup json array
-          # matrix=$(echo ${matrix_selection} | jq -s -c)
+          matrix=$(echo ${matrix_selection} | jq -s -c)
           #
           ## Setup the json build matrix
           # matrix=$(echo ${matrix_selection} | jq -s -c '{"builds": .}')
