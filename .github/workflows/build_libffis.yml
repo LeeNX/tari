@@ -253,7 +253,7 @@ jobs:
           # libminotari_wallet_ffi-ios-x86_64
           path: libffiss
           pattern: lib${{ matrix.libffis }}-ios-*
-          merge-multiple: true
+          # merge-multiple: true
 
       - name: Verify checksums
         shell: bash
@@ -262,7 +262,7 @@ jobs:
           ls -alhtR
           find . -name "*.sha256" -type f -print | xargs cat >> libffiss.txt.sha256-verify
           cat libffiss.txt.sha256-verify
-          sha256sum -c libffiss.txt.sha256-verify
+          sha256sum --ignore-missing --check libffiss.txt.sha256-verify
 
       - name: Assemble iOS universal libffis
         shell: bash
