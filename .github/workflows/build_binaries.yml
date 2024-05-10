@@ -608,6 +608,11 @@ jobs:
           BINFN="${TS_FILENAME}-${TARI_VERSION}-${VSHA_SHORT}"
           echo "BINFN=${BINFN}" >> $GITHUB_ENV
 
+      - name: Install macOS dependencies
+        shell: bash
+        run: |
+          brew install coreutils
+
       - name: Verify checksums and extract
         shell: bash
         working-directory: osxuni
