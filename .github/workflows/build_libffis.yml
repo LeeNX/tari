@@ -51,9 +51,10 @@ jobs:
           # matrix_selection=$( jq -c '.[] | select( ."runs-on" == "ubuntu-latest" )' ${{ env.matrix-json-file }} )
           # matrix_selection=$( jq -c '.[] | select( ."target" == "x86_64-linux-android" )' ${{ env.matrix-json-file }} )
           # matrix_selection=$( jq -c '.[] | select( ."target" | contains("android") )' ${{ env.matrix-json-file }} )
+          matrix_selection=$( jq -c '.[] | select( ."target" | contains("ios") )' ${{ env.matrix-json-file }} )
           #
           ## buid select target images - build_enabled
-          matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
+          # matrix_selection=$( jq -c '.[] | select( ."build_enabled" != false )' ${{ env.matrix-json-file }} )
           #
           ## Setup json array
           matrix=$(echo ${matrix_selection} | jq -s -c)
@@ -249,7 +250,10 @@ jobs:
         with:
           # wildcard downloads not supported yet ( minotari_*_ffi-ios-* )
           # name: ${{ matrix.libffis }}-ios
+          # libminotari_wallet_ffi-ios-x86_64
           path: libffiss
+          pattern: lib${{ matrix.libffis }}-ios-*
+          merge-multiple: true
 
       - name: Verify checksums
         shell: bash
