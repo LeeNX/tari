@@ -591,6 +591,9 @@ jobs:
     runs-on: macos-14
 
     steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
       - name: Download macOS binaries
         uses: actions/download-artifact@v4
         with:
