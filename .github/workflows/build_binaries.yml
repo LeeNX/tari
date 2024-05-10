@@ -656,6 +656,7 @@ jobs:
           MACOS_NOTARIZE_PASSWORD: ${{ secrets.MACOS_NOTARIZE_PASSWORD }}
           MACOS_ASC_PROVIDER: ${{ secrets.MACOS_ASC_PROVIDER }}
         run: |
+          set -xo pipefail
           echo $MACOS_APPLICATION_CERT | base64 --decode > application.p12
           echo $MACOS_INSTALLER_CERT | base64 --decode > installer.p12
           security create-keychain -p $MACOS_KEYCHAIN_PASS build.keychain
