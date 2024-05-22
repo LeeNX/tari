@@ -94,7 +94,7 @@ apt-get install --no-install-recommends --assume-yes \
   libudev-dev \
   zip
 
-# Install rust
+echo "Installing rust ..."
 mkdir -p "$HOME/.cargo/bin/"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -107,62 +107,70 @@ if [ "${CROSS_DEB_ARCH}" != "${nativeArch}" ]; then
   echo "Setup Cross CPU Compile ..."
   sed -i.save -e "s/^deb\ http/deb [arch="${nativeArch}"] http/g" /etc/apt/sources.list
 
+  # xenial
+  # bionic
+  # focal
+  # ubuntu_tag=focal
+
+  . /etc/lsb-release
+  ubuntu_tag=${DISTRIB_CODENAME}
+
   if [ "${crossArch}" == "arm64" ]; then
-    cat << EoF > /etc/apt/sources.list.d/bionic-${crossArch}.list
-deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic main restricted universe multiverse
-# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic main restricted universe multiverse
+    cat << EoF > /etc/apt/sources.list.d/${ubuntu_tag}-${crossArch}.list
+deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag} main restricted universe multiverse
+# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag} main restricted universe multiverse
 
-deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic-updates main restricted universe multiverse
-# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic-updates main restricted universe multiverse
+deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag}-updates main restricted universe multiverse
+# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag}-updates main restricted universe multiverse
 
-deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic-backports main restricted universe multiverse
-# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic-backports main restricted universe multiverse
+deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag}-backports main restricted universe multiverse
+# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag}-backports main restricted universe multiverse
 
-deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic-security main restricted universe multiverse
-# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports bionic-security main restricted universe multiverse
+deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag}-security main restricted universe multiverse
+# deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag}-security main restricted universe multiverse
 
-deb [arch=${crossArch}] http://archive.canonical.com/ubuntu bionic partner
-# deb-src [arch=${crossArch}] http://archive.canonical.com/ubuntu bionic partner
+deb [arch=${crossArch}] http://archive.canonical.com/ubuntu ${ubuntu_tag} partner
+# deb-src [arch=${crossArch}] http://archive.canonical.com/ubuntu ${ubuntu_tag} partner
 EoF
   fi
 
   if [ "${crossArch}" == "amd64" ]; then
-    cat << EoF > /etc/apt/sources.list.d/bionic-${crossArch}.list
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ bionic main restricted
-# deb-src http://archive.ubuntu.com/ubuntu/ bionic main restricted
+    cat << EoF > /etc/apt/sources.list.d/${ubuntu_tag}-${crossArch}.list
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag} main restricted
+# deb-src http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag} main restricted
 
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ bionic-updates main restricted
-# deb-src http://archive.ubuntu.com/ubuntu/ bionic-updates main restricted
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-updates main restricted
+# deb-src http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-updates main restricted
 
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ bionic universe
-# deb-src http://archive.ubuntu.com/ubuntu/ bionic universe
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ bionic-updates universe
-# deb-src http://archive.ubuntu.com/ubuntu/ bionic-updates universe
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag} universe
+# deb-src http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag} universe
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-updates universe
+# deb-src http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-updates universe
 
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ bionic multiverse
-# deb-src http://archive.ubuntu.com/ubuntu/ bionic multiverse
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ bionic-updates multiverse
-# deb-src http://archive.ubuntu.com/ubuntu/ bionic-updates multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag} multiverse
+# deb-src http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag} multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-updates multiverse
+# deb-src http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-updates multiverse
 
-deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ bionic-backports main restricted universe multiverse
-# deb-src http://archive.ubuntu.com/ubuntu/ bionic-backports main restricted universe multiverse
+deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-backports main restricted universe multiverse
+# deb-src http://archive.ubuntu.com/ubuntu/ ${ubuntu_tag}-backports main restricted universe multiverse
 
-# deb http://archive.canonical.com/ubuntu bionic partner
-# deb-src http://archive.canonical.com/ubuntu bionic partner
+# deb http://archive.canonical.com/ubuntu ${ubuntu_tag} partner
+# deb-src http://archive.canonical.com/ubuntu ${ubuntu_tag} partner
 
-deb [arch=amd64] http://security.ubuntu.com/ubuntu/ bionic-security main restricted
-# deb-src http://security.ubuntu.com/ubuntu/ bionic-security main restricted
-deb [arch=amd64] http://security.ubuntu.com/ubuntu/ bionic-security universe
-# deb-src http://security.ubuntu.com/ubuntu/ bionic-security universe
-deb [arch=amd64] http://security.ubuntu.com/ubuntu/ bionic-security multiverse
-# deb-src http://security.ubuntu.com/ubuntu/ bionic-security multiverse
+deb [arch=amd64] http://security.ubuntu.com/ubuntu/ ${ubuntu_tag}-security main restricted
+# deb-src http://security.ubuntu.com/ubuntu/ ${ubuntu_tag}-security main restricted
+deb [arch=amd64] http://security.ubuntu.com/ubuntu/ ${ubuntu_tag}-security universe
+# deb-src http://security.ubuntu.com/ubuntu/ ${ubuntu_tag}-security universe
+deb [arch=amd64] http://security.ubuntu.com/ubuntu/ ${ubuntu_tag}-security multiverse
+# deb-src http://security.ubuntu.com/ubuntu/ ${ubuntu_tag}-security multiverse
 EoF
   fi
 
   echo "Sources ..."
   cat /etc/apt/sources.list
   echo "Cross-compile target ..."
-  cat /etc/apt/sources.list.d/bionic-${crossArch}.list
+  cat /etc/apt/sources.list.d/${ubuntu_tag}-${crossArch}.list
 
   dpkg --add-architecture ${CROSS_DEB_ARCH}
 
@@ -177,7 +185,8 @@ EoF
     g++-${targetPlatform}-linux-gnu
 
   apt-get --assume-yes install \
-    libhidapi-dev:${CROSS_DEB_ARCH}
+    libhidapi-dev:${CROSS_DEB_ARCH} \
+    libudev-dev:${CROSS_DEB_ARCH}
 
 fi
 
