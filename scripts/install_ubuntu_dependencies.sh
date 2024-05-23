@@ -14,6 +14,9 @@ apt-get install --no-install-recommends --assume-yes \
   git \
   cmake \
   dh-autoreconf \
+  clang \
+  g++ \
+  g++-7 \
   libc++-dev \
   libc++abi-dev \
   libprotobuf-dev \
