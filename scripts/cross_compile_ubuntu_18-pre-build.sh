@@ -5,17 +5,32 @@
 
 set -e
 
-USAGE="Usage: $0 target build ie: x86_64-unknown-linux-gnu or aarch64-unknown-linux-gnu"
+USAGE="Usage: $0 {target build}
+ where target build is one of the following:
+  x86_64-unknown-linux-gnu or
+  aarch64-unknown-linux-gnu or
+  riscv64gc-unknown-linux-gnu
+"
 
 if [ "$#" == "0" ]; then
-  echo "$USAGE"
+  echo -e "${USAGE}"
   exit 1
 fi
 
 if [ -z "${CROSS_DEB_ARCH}" ]; then
-  echo "Should be run from cross, which sets the env CROSS_DEB_ARCH"
+  echo -e "Should be run from cross, which sets the env 'CROSS_DEB_ARCH'
+  amd64
+  arm64
+  riscv64
+"
   exit 1
 fi
+
+DEBIAN_FRONTEND=${DEBIAN_FRONTEND:-noninteractive}
+# Hack of Note!
+export TZ=Etc/GMT
+ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime
+echo ${TZ} > /etc/timezone
 
 targetBuild="${1}"
 nativeRunTime=$(uname -m)
@@ -23,21 +38,25 @@ echo "Native RunTime is ${nativeRunTime}"
 
 if [ "${nativeRunTime}" == "x86_64" ]; then
   nativeArch=amd64
-  if [ "${targetBuild}" == "aarch64-unknown-linux-gnu" ]; then
-    targetArch=arm64
-    targetPlatform=aarch64
-  else
-    targetArch=amd64
-    targetPlatform=x86-64
-  fi
 elif [ "${nativeRunTime}" == "aarch64" ]; then
   nativeArch=arm64
-  if [ "${targetBuild}" == "x86_64-unknown-linux-gnu" ]; then
-    targetArch=amd64
-    targetPlatform=x86-64
-  fi
 elif [ "${nativeRunTime}" == "riscv64" ]; then
   nativeArch=riscv64
+  echo "ToDo!"
+else
+  echo "!!Unsupport platform!!"
+  exit 1
+fi
+
+if [ "${targetBuild}" == "aarch64-unknown-linux-gnu" ]; then
+  targetArch=arm64
+  targetPlatform=aarch64
+elif [ "${targetBuild}" == "x86_64-unknown-linux-gnu" ]; then
+  targetArch=amd64
+  targetPlatform=x86-64
+elif [ "${targetBuild}" == "riscv64gc-unknown-linux-gnu" ]; then
+  targetArch=riscv64
+  targetPlatform=riscv64
   echo "ToDo!"
 else
   echo "!!Unsupport platform!!"
@@ -91,7 +110,7 @@ if [ "${CROSS_DEB_ARCH}" != "${nativeArch}" ]; then
   . /etc/lsb-release
   ubuntu_tag=${DISTRIB_CODENAME}
 
-  if [ "${crossArch}" == "arm64" ]; then
+  if [[ "${crossArch}" =~ ^(arm64|riscv64) ]]; then
     cat << EoF > /etc/apt/sources.list.d/${ubuntu_tag}-${crossArch}.list
 deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag} main restricted universe multiverse
 # deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag} main restricted universe multiverse
