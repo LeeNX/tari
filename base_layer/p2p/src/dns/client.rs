@@ -33,17 +33,15 @@ use trust_dns_client::{
     proto::{
         error::ProtoError,
         iocompat::AsyncIoTokioAsStd,
-        rr::dnssec::TrustAnchor,
+        rr::dnssec::{SigSigner, TrustAnchor},
         rustls::tls_client_connect,
         xfer::DnsResponse,
         DnsHandle,
         DnsMultiplexer,
     },
-    rr::{dnssec::SigSigner, DNSClass, IntoName, RecordType},
-    serialize::binary::BinEncoder,
+    rr::{DNSClass, IntoName, RecordType},
+    serialize::binary::{BinEncodable, BinEncoder},
 };
-
-use trust_dns_client::serialize::binary::BinEncodable;
 
 use super::DnsClientError;
 #[cfg(test)]
