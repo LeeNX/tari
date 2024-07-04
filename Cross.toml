@@ -55,7 +55,8 @@ passthrough = [
   "CFLAGS=-DMDB_USE_ROBUST=0",
 ]
 
-# Currently needs cross-rs from git ```cargo install cross --git https://github.com/cross-rs/cross```
+# Currently needs cross-rs from git
+# ```cargo install cross --git https://github.com/cross-rs/cross```
 [target.aarch64-unknown-linux-gnu]
 image.name = "ubuntu:18.04"
 # targetting is needed for apple silicon
