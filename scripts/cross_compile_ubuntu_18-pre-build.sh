@@ -28,9 +28,9 @@ fi
 
 DEBIAN_FRONTEND=${DEBIAN_FRONTEND:-noninteractive}
 # Hack of Note!
-export TZ=Etc/GMT
-ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime
-echo ${TZ} > /etc/timezone
+TimeZone=${TimeZone:-"Etc/GMT"}
+ln -snf /usr/share/zoneinfo/${TimeZone} /etc/localtime
+echo ${TimeZone} > /etc/timezone
 
 targetBuild="${1}"
 nativeRunTime=$(uname -m)
@@ -110,7 +110,7 @@ if [ "${CROSS_DEB_ARCH}" != "${nativeArch}" ]; then
   . /etc/lsb-release
   ubuntu_tag=${DISTRIB_CODENAME}
 
-  if [[ "${crossArch}" =~ ^(arm64|riscv64) ]]; then
+  if [[ "${crossArch}" =~ ^(arm|riscv)64$ ]]; then
     cat << EoF > /etc/apt/sources.list.d/${ubuntu_tag}-${crossArch}.list
 deb [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag} main restricted universe multiverse
 # deb-src [arch=${crossArch}] http://ports.ubuntu.com/ubuntu-ports ${ubuntu_tag} main restricted universe multiverse
