@@ -52,6 +52,8 @@ use tari_core::{
         },
     },
 };
+use tari_crypto::ristretto::pedersen::PedersenCommitment;
+use tari_script::CheckSigSchnorrSignature;
 use tari_service_framework::reply_channel::SenderService;
 use tari_utilities::hex::Hex;
 use tokio::sync::broadcast;
@@ -112,8 +114,8 @@ pub enum TransactionServiceRequest {
     EncumberAggregateUtxo {
         fee_per_gram: MicroMinotari,
         output_hash: String,
-        script_input_shares: Vec<Signature>,
-        script_public_key_shares: Vec<PublicKey>,
+        expected_commitment: PedersenCommitment,
+        script_input_shares: HashMap<PublicKey, CheckSigSchnorrSignature>,
         script_signature_public_nonces: Vec<PublicKey>,
         sender_offset_public_key_shares: Vec<PublicKey>,
         metadata_ephemeral_public_key_shares: Vec<PublicKey>,
@@ -229,8 +231,8 @@ impl fmt::Display for TransactionServiceRequest {
             Self::EncumberAggregateUtxo {
                 fee_per_gram,
                 output_hash,
+                expected_commitment,
                 script_input_shares,
-                script_public_key_shares,
                 script_signature_public_nonces,
                 sender_offset_public_key_shares,
                 metadata_ephemeral_public_key_shares,
@@ -238,23 +240,20 @@ impl fmt::Display for TransactionServiceRequest {
                 recipient_address,
                 ..
             } => f.write_str(&format!(
-                "Creating encumber n-of-m utxo with: fee_per_gram = {}, output_hash = {}, script_input_shares = {:?}, \
-                 script_public_key_shares = {:?}, script_signature_shares = {:?}, sender_offset_public_key_shares = \
-                 {:?}, metadata_ephemeral_public_key_shares = {:?}, dh_shared_secret_shares = {:?}, recipient_address \
-                 = {}",
+                "Creating encumber n-of-m utxo with: fee_per_gram = {}, output_hash = {}, commitment = {}, \
+                 script_input_shares = {:?},, script_signature_shares = {:?}, sender_offset_public_key_shares = {:?}, \
+                 metadata_ephemeral_public_key_shares = {:?}, dh_shared_secret_shares = {:?}, recipient_address = {}",
                 fee_per_gram,
                 output_hash,
+                expected_commitment.to_hex(),
                 script_input_shares
                     .iter()
                     .map(|v| format!(
-                        "(sig: {}, nonce: {})",
-                        v.get_signature().to_hex(),
-                        v.get_public_nonce().to_hex()
+                        "(public_key: {}, sig: {}, nonce: {})",
+                        v.0.to_hex(),
+                        v.1.get_signature().to_hex(),
+                        v.1.get_public_nonce().to_hex()
                     ))
-                    .collect::<Vec<String>>(),
-                script_public_key_shares
-                    .iter()
-                    .map(|v| v.to_hex())
                     .collect::<Vec<String>>(),
                 script_signature_public_nonces
                     .iter()
@@ -358,7 +357,7 @@ impl fmt::Display for TransactionServiceRequest {
 pub enum TransactionServiceResponse {
     TransactionSent(TxId),
     TransactionSentWithOutputHash(TxId, FixedHash),
-    EncumberAggregateUtxo(TxId, Box<Transaction>, Box<PublicKey>),
+    EncumberAggregateUtxo(TxId, Box<Transaction>, Box<PublicKey>, Box<PublicKey>, Box<PublicKey>),
     TransactionImported(TxId),
     BurntTransactionSent {
         tx_id: TxId,
@@ -727,25 +726,26 @@ impl TransactionServiceHandle {
         }
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub async fn encumber_aggregate_utxo(
         &mut self,
         fee_per_gram: MicroMinotari,
         output_hash: String,
-        script_input_shares: Vec<Signature>,
-        script_public_key_shares: Vec<PublicKey>,
+        expected_commitment: PedersenCommitment,
+        script_input_shares: HashMap<PublicKey, CheckSigSchnorrSignature>,
         script_signature_public_nonces: Vec<PublicKey>,
         sender_offset_public_key_shares: Vec<PublicKey>,
         metadata_ephemeral_public_key_shares: Vec<PublicKey>,
         dh_shared_secret_shares: Vec<PublicKey>,
         recipient_address: TariAddress,
-    ) -> Result<(TxId, Transaction, PublicKey), TransactionServiceError> {
+    ) -> Result<(TxId, Transaction, PublicKey, PublicKey, PublicKey), TransactionServiceError> {
         match self
             .handle
             .call(TransactionServiceRequest::EncumberAggregateUtxo {
                 fee_per_gram,
                 output_hash,
+                expected_commitment,
                 script_input_shares,
-                script_public_key_shares,
                 script_signature_public_nonces,
                 sender_offset_public_key_shares,
                 metadata_ephemeral_public_key_shares,
@@ -754,9 +754,19 @@ impl TransactionServiceHandle {
             })
             .await??
         {
-            TransactionServiceResponse::EncumberAggregateUtxo(tx_id, transaction, total_script_key) => {
-                Ok((tx_id, *transaction, *total_script_key))
-            },
+            TransactionServiceResponse::EncumberAggregateUtxo(
+                tx_id,
+                transaction,
+                total_script_key,
+                total_metadata_ephemeral_public_key,
+                total_script_nonce,
+            ) => Ok((
+                tx_id,
+                *transaction,
+                *total_script_key,
+                *total_metadata_ephemeral_public_key,
+                *total_script_nonce,
+            )),
             _ => Err(TransactionServiceError::UnexpectedApiResponse),
         }
     }

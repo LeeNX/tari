@@ -209,7 +209,7 @@ async fn setup_transaction_service<P: AsRef<Path>>(
 
     let passphrase = SafePassword::from("My lovely secret passphrase");
     let db = WalletDatabase::new(WalletSqliteDatabase::new(db_connection.clone(), passphrase).unwrap());
-    let metadata = ChainMetadata::new(std::i64::MAX as u64, FixedHash::zero(), 0, 0, 1.into(), 0).unwrap();
+    let metadata = ChainMetadata::new(i64::MAX as u64, FixedHash::zero(), 0, 0, 1.into(), 0).unwrap();
 
     db.set_chain_metadata(metadata).unwrap();
 
@@ -381,7 +381,7 @@ async fn setup_transaction_service_no_comms(
 
     let ts_service_db = TransactionServiceSqliteDatabase::new(db_connection.clone(), cipher.clone());
     let ts_db = TransactionDatabase::new(ts_service_db.clone());
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let oms_db = OutputManagerDatabase::new(OutputManagerSqliteDatabase::new(db_connection));
     let output_manager_service = OutputManagerService::new(
         OutputManagerServiceConfig::default(),
@@ -500,18 +500,16 @@ fn try_decode_transaction_reply_message(bytes: Vec<u8>) -> Option<RecipientSigne
 
 fn try_decode_finalized_transaction_message(bytes: Vec<u8>) -> Option<proto::TransactionFinalizedMessage> {
     let envelope_body = EnvelopeBody::decode(&mut bytes.as_slice()).unwrap();
-    match envelope_body.decode_part::<proto::TransactionFinalizedMessage>(1) {
-        Err(_) => None,
-        Ok(d) => d,
-    }
+    envelope_body
+        .decode_part::<proto::TransactionFinalizedMessage>(1)
+        .unwrap_or_default()
 }
 
 fn try_decode_transaction_cancelled_message(bytes: Vec<u8>) -> Option<proto::TransactionCancelledMessage> {
     let envelope_body = EnvelopeBody::decode(&mut bytes.as_slice()).unwrap();
-    match envelope_body.decode_part::<proto::TransactionCancelledMessage>(1) {
-        Err(_) => None,
-        Ok(d) => d,
-    }
+    envelope_body
+        .decode_part::<proto::TransactionCancelledMessage>(1)
+        .unwrap_or_default()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -2592,7 +2590,7 @@ async fn test_accepting_unknown_tx_id_and_malformed_reply() {
 #[tokio::test]
 async fn finalize_tx_with_incorrect_pubkey() {
     let factories = CryptoFactories::default();
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
 
     let temp_dir = tempdir().unwrap();
     let path_string = temp_dir.path().to_str().unwrap().to_string();
@@ -2720,7 +2718,7 @@ async fn finalize_tx_with_incorrect_pubkey() {
 #[tokio::test]
 async fn finalize_tx_with_missing_output() {
     let factories = CryptoFactories::default();
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let temp_dir = tempdir().unwrap();
     let path_string = temp_dir.path().to_str().unwrap().to_string();
 
@@ -3401,7 +3399,7 @@ async fn test_transaction_cancellation() {
         .remove(&tx_id)
         .is_none());
 
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let input = create_wallet_output_with_data(
         script!(Nop),
         OutputFeatures::default(),
@@ -3413,7 +3411,7 @@ async fn test_transaction_cancellation() {
     .unwrap();
 
     let constants = create_consensus_constants(0);
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let mut builder = SenderTransactionProtocol::builder(constants, key_manager.clone());
     let amount = MicroMinotari::from(10_000);
     let change = TestParams::new(&key_manager).await;
@@ -4270,7 +4268,7 @@ async fn test_restarting_transaction_protocols() {
     .await;
     let constants = create_consensus_constants(0);
     let fee_calc = Fee::new(*constants.transaction_weight_params());
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let mut builder = SenderTransactionProtocol::builder(constants.clone(), key_manager.clone());
     let fee = fee_calc.calculate(MicroMinotari(4), 1, 1, 1, 0);
     let change = TestParams::new(&key_manager).await;
@@ -4695,7 +4693,7 @@ async fn test_resend_on_startup() {
         NodeIdentity::random(&mut OsRng, get_next_memory_address(), PeerFeatures::COMMUNICATION_NODE);
 
     // First we will check the Send Tranasction message
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let input = create_wallet_output_with_data(
         script!(Nop),
         OutputFeatures::default(),
@@ -4706,7 +4704,7 @@ async fn test_resend_on_startup() {
     .await
     .unwrap();
     let constants = create_consensus_constants(0);
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let mut builder = SenderTransactionProtocol::builder(constants.clone(), key_manager.clone());
     let amount = MicroMinotari::from(10_000);
     let change = TestParams::new(&key_manager).await;
@@ -5223,7 +5221,7 @@ async fn test_transaction_timeout_cancellation() {
 
     // Now to test if the timeout has elapsed during downtime and that it is honoured on startup
     // First we will check the Send Transction message
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let input = create_wallet_output_with_data(
         script!(Nop),
         OutputFeatures::default(),
@@ -5234,7 +5232,7 @@ async fn test_transaction_timeout_cancellation() {
     .await
     .unwrap();
     let constants = create_consensus_constants(0);
-    let key_manager = create_memory_db_key_manager();
+    let key_manager = create_memory_db_key_manager().unwrap();
     let mut builder = SenderTransactionProtocol::builder(constants, key_manager.clone());
     let amount = MicroMinotari::from(10_000);
     let change = TestParams::new(&key_manager).await;

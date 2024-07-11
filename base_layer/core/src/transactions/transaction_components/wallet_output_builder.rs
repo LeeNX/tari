@@ -206,8 +206,8 @@ impl WalletOutputBuilder {
         mut self,
         key_manager: &KM,
         sender_offset_key_id: &TariKeyId,
-        sender_offset_public_key_shares: &[PublicKey],
-        ephemeral_public_key_shares: &[PublicKey],
+        aggregated_sender_offset_public_key_shares: &PublicKey,
+        aggregated_ephemeral_public_key_shares: &PublicKey,
     ) -> Result<Self, TransactionError> {
         let script = self
             .script
@@ -223,16 +223,13 @@ impl WalletOutputBuilder {
         );
 
         let sender_offset_public_key_self = key_manager.get_public_key_at_key_id(sender_offset_key_id).await?;
-        let aggregate_sender_offset_public_key = sender_offset_public_key_shares
-            .iter()
-            .fold(sender_offset_public_key_self, |acc, x| acc + x);
+        let aggregate_sender_offset_public_key =
+            aggregated_sender_offset_public_key_shares + &sender_offset_public_key_self;
 
         let (ephemeral_private_nonce_id, ephemeral_pubkey_self) = key_manager
-            .get_next_key(&TransactionKeyManagerBranch::MetadataEphemeralNonce.get_branch_key())
+            .get_next_key(TransactionKeyManagerBranch::MetadataEphemeralNonce.get_branch_key())
             .await?;
-        let aggregate_ephemeral_pubkey = ephemeral_public_key_shares
-            .iter()
-            .fold(ephemeral_pubkey_self, |acc, x| acc + x);
+        let aggregate_ephemeral_pubkey = aggregated_ephemeral_public_key_shares + ephemeral_pubkey_self;
 
         let receiver_partial_metadata_signature = key_manager
             .get_receiver_partial_metadata_signature(
@@ -257,6 +254,8 @@ impl WalletOutputBuilder {
                 &commitment,
                 ephemeral_commitment,
                 &TransactionOutputVersion::get_current_version(),
+                Some(&aggregate_sender_offset_public_key),
+                Some(&aggregate_ephemeral_pubkey),
                 &metadata_message,
             )
             .await?;
@@ -320,7 +319,7 @@ mod test {
 
     #[tokio::test]
     async fn test_try_build() {
-        let key_manager = create_memory_db_key_manager();
+        let key_manager = create_memory_db_key_manager().unwrap();
         let (spending_key_id, _, script_key_id, _) = key_manager.get_next_spend_and_script_key_ids().await.unwrap();
         let value = MicroMinotari(100);
         let kmob = WalletOutputBuilder::new(value, spending_key_id.clone());
@@ -362,7 +361,7 @@ mod test {
 
     #[tokio::test]
     async fn test_partial_metadata_signatures() {
-        let key_manager = create_memory_db_key_manager();
+        let key_manager = create_memory_db_key_manager().unwrap();
         let (spending_key_id, _, script_key_id, _) = key_manager.get_next_spend_and_script_key_ids().await.unwrap();
         let value = MicroMinotari(100);
         let kmob = WalletOutputBuilder::new(value, spending_key_id.clone());
@@ -418,6 +417,8 @@ mod test {
                         &commitment,
                         receiver_metadata_signature.ephemeral_commitment(),
                         &wallet_output.version,
+                        None,
+                        None,
                         &metadata_message,
                     )
                     .await

@@ -20,12 +20,12 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use std::{fmt, fmt::Formatter, sync::Arc};
+use std::{collections::HashMap, fmt, fmt::Formatter, sync::Arc};
 
 use tari_common_types::{
     tari_address::TariAddress,
     transaction::TxId,
-    types::{Commitment, FixedHash, HashOutput, PublicKey, Signature},
+    types::{Commitment, FixedHash, HashOutput, PublicKey},
 };
 use tari_core::{
     covenants::Covenant,
@@ -37,7 +37,8 @@ use tari_core::{
         SenderTransactionProtocol,
     },
 };
-use tari_script::TariScript;
+use tari_crypto::ristretto::pedersen::PedersenCommitment;
+use tari_script::{CheckSigSchnorrSignature, TariScript};
 use tari_service_framework::reply_channel::SenderService;
 use tari_utilities::hex::Hex;
 use tokio::sync::broadcast;
@@ -64,8 +65,8 @@ pub enum OutputManagerRequest {
         tx_id: TxId,
         fee_per_gram: MicroMinotari,
         output_hash: String,
-        script_input_shares: Vec<Signature>,
-        script_public_key_shares: Vec<PublicKey>,
+        expected_commitment: PedersenCommitment,
+        script_input_shares: HashMap<PublicKey, CheckSigSchnorrSignature>,
         script_signature_public_nonces: Vec<PublicKey>,
         sender_offset_public_key_shares: Vec<PublicKey>,
         metadata_ephemeral_public_key_shares: Vec<PublicKey>,
@@ -154,10 +155,17 @@ impl fmt::Display for OutputManagerRequest {
                 v.metadata_signature.u_y().to_hex(),
                 v.metadata_signature.u_a().to_hex(),
             ),
-            EncumberAggregateUtxo { tx_id, output_hash, .. } => write!(
+            EncumberAggregateUtxo {
+                tx_id,
+                output_hash,
+                expected_commitment,
+                ..
+            } => write!(
                 f,
-                "Encumber aggregate utxo with tx_id: {} and output_hash: {}",
-                tx_id, output_hash
+                "Encumber aggregate utxo with tx_id: {} and output: ({},{})",
+                tx_id,
+                expected_commitment.to_hex(),
+                output_hash
             ),
             GetRecipientTransaction(_) => write!(f, "GetRecipientTransaction"),
             ConfirmPendingTransaction(v) => write!(f, "ConfirmPendingTransaction ({})", v),
@@ -232,7 +240,16 @@ pub enum OutputManagerResponse {
     ConvertedToTransactionOutput(Box<TransactionOutput>),
     OutputMetadataSignatureUpdated,
     RecipientTransactionGenerated(ReceiverTransactionProtocol),
-    EncumberAggregateUtxo((Transaction, MicroMinotari, MicroMinotari, PublicKey)),
+    EncumberAggregateUtxo(
+        (
+            Transaction,
+            MicroMinotari,
+            MicroMinotari,
+            PublicKey,
+            PublicKey,
+            PublicKey,
+        ),
+    ),
     OutputConfirmed,
     PendingTransactionConfirmed,
     PayToSelfTransaction((MicroMinotari, Transaction)),
@@ -251,8 +268,13 @@ pub enum OutputManagerResponse {
     RewoundOutputs(Vec<RecoveredOutput>),
     ScanOutputs(Vec<RecoveredOutput>),
     AddKnownOneSidedPaymentScript,
-    CreateOutputWithFeatures { output: Box<WalletOutputBuilder> },
-    CreatePayToSelfWithOutputs { transaction: Box<Transaction>, tx_id: TxId },
+    CreateOutputWithFeatures {
+        output: Box<WalletOutputBuilder>,
+    },
+    CreatePayToSelfWithOutputs {
+        transaction: Box<Transaction>,
+        tx_id: TxId,
+    },
     ReinstatedCancelledInboundTx,
     ClaimHtlcTransaction((TxId, MicroMinotari, MicroMinotari, Transaction)),
     OutputInfoByTxId(OutputInfoByTxId),
@@ -736,27 +758,38 @@ impl OutputManagerHandle {
         }
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub async fn encumber_aggregate_utxo(
         &mut self,
         tx_id: TxId,
         fee_per_gram: MicroMinotari,
         output_hash: String,
-        script_input_shares: Vec<Signature>,
-        script_public_key_shares: Vec<PublicKey>,
+        expected_commitment: PedersenCommitment,
+        script_input_shares: HashMap<PublicKey, CheckSigSchnorrSignature>,
         script_signature_public_nonces: Vec<PublicKey>,
         sender_offset_public_key_shares: Vec<PublicKey>,
         metadata_ephemeral_public_key_shares: Vec<PublicKey>,
         dh_shared_secret_shares: Vec<PublicKey>,
         recipient_address: TariAddress,
-    ) -> Result<(Transaction, MicroMinotari, MicroMinotari, PublicKey), OutputManagerError> {
+    ) -> Result<
+        (
+            Transaction,
+            MicroMinotari,
+            MicroMinotari,
+            PublicKey,
+            PublicKey,
+            PublicKey,
+        ),
+        OutputManagerError,
+    > {
         match self
             .handle
             .call(OutputManagerRequest::EncumberAggregateUtxo {
                 tx_id,
                 fee_per_gram,
                 output_hash,
+                expected_commitment,
                 script_input_shares,
-                script_public_key_shares,
                 script_signature_public_nonces,
                 sender_offset_public_key_shares,
                 metadata_ephemeral_public_key_shares,
@@ -765,9 +798,21 @@ impl OutputManagerHandle {
             })
             .await??
         {
-            OutputManagerResponse::EncumberAggregateUtxo((transaction, amount, fee, total_script_key)) => {
-                Ok((transaction, amount, fee, total_script_key))
-            },
+            OutputManagerResponse::EncumberAggregateUtxo((
+                transaction,
+                amount,
+                fee,
+                total_script_key,
+                total_metadata_ephemeral_public_key,
+                total_script_nonce,
+            )) => Ok((
+                transaction,
+                amount,
+                fee,
+                total_script_key,
+                total_metadata_ephemeral_public_key,
+                total_script_nonce,
+            )),
             _ => Err(OutputManagerError::UnexpectedApiResponse),
         }
     }

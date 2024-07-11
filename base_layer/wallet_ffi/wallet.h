@@ -640,6 +640,24 @@ struct ByteVector *public_key_get_bytes(TariPublicKey *pk,
                                         int *error_out);
 
 /**
+ * Converts public key to emoji encding
+ *
+ * ## Arguments
+ * `pk` - The pointer to a TariPublicKey
+ * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null. Functions
+ * as an out parameter.
+ *
+ * ## Returns
+ * `*mut c_char` - Returns a pointer to a char array. Note that it returns empty
+ * if emoji is null or if there was an error creating the emoji string from public key
+ *
+ * # Safety
+ * The ```string_destroy``` method must be called when finished with a string from rust to prevent a memory leak
+ */
+char *public_key_get_emoji_encoding(TariPublicKey *pk,
+                                    int *error_out);
+
+/**
  * Creates a TariPublicKey from a TariPrivateKey
  *
  * ## Arguments
@@ -780,6 +798,40 @@ char *tari_address_network(TariWalletAddress *address,
                            int *error_out);
 
 /**
+ * Returns the u8 representation of a TariWalletAddress's network
+ *
+ * ## Arguments
+ * `address` - The pointer to a TariWalletAddress
+ * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null. Functions
+ * as an out parameter.
+ *
+ * ## Returns
+ * `u8` - Returns u8 representing the network. On failure, returns 0. This may be valid so always check the error out
+ *
+ * # Safety
+ * The ```string_destroy``` method must be called when finished with a string from rust to prevent a memory leak
+ */
+uint8_t tari_address_network_u8(TariWalletAddress *address,
+                                int *error_out);
+
+/**
+ * Returns the u8 representation of a TariWalletAddress's checksum
+ *
+ * ## Arguments
+ * `address` - The pointer to a TariWalletAddress
+ * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null. Functions
+ * as an out parameter.
+ *
+ * ## Returns
+ * `u8` - Returns u8 representing the checksum.. On failure, returns 0. This may be valid so always check the error out
+ *
+ * # Safety
+ * The ```string_destroy``` method must be called when finished with a string from rust to prevent a memory leak
+ */
+uint8_t tari_address_checksum_u8(TariWalletAddress *address,
+                                 int *error_out);
+
+/**
  * Creates a char array from a TariWalletAddress's features
  *
  * ## Arguments
@@ -798,6 +850,23 @@ char *tari_address_features(TariWalletAddress *address,
                             int *error_out);
 
 /**
+ * Creates a char array from a TariWalletAddress's features
+ *
+ * ## Arguments
+ * `address` - The pointer to a TariWalletAddress
+ * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null. Functions
+ * as an out parameter.
+ *
+ * ## Returns
+ * u8` - Returns u8 representing the features. On failure, returns 0. This may be valid so always check the error out
+ *
+ * # Safety
+ * The ```string_destroy``` method must be called when finished with a string from rust to prevent a memory leak
+ */
+uint8_t tari_address_features_u8(TariWalletAddress *address,
+                                 int *error_out);
+
+/**
  * Creates a public key from a TariWalletAddress's view key
  *
  * ## Arguments
@@ -806,7 +875,7 @@ char *tari_address_features(TariWalletAddress *address,
  * as an out parameter.
  *
  * ## Returns
- * `*mut TariPublicKey` - Returns a pointer to a TariPublicKey. Note that it returns null
+ * `*mut TariPublicKey` - Returns a pointer to a TariPublicKey. Note that it returns null if there is no key present
  *
  * # Safety
  * The ```string_destroy``` method must be called when finished with a string from rust to prevent a memory leak
@@ -847,6 +916,21 @@ TariPublicKey *tari_address_spend_key(TariWalletAddress *address,
  */
 TariWalletAddress *emoji_id_to_tari_address(const char *emoji,
                                             int *error_out);
+
+/**
+ * Does a lookup of the emoji character for a byte, using the emoji encoding of tari
+ *
+ * ## Arguments
+ * `byte` - u8 byte to lookup the emoji for
+ *
+ * ## Returns
+ * `*mut c_char` - Returns a pointer to a char array. Note that it returns empty
+ * if emoji is null or if there was an error creating the emoji string from TariWalletAddress
+ *
+ * # Safety
+ * The ```string_destroy``` method must be called when finished with a string from rust to prevent a memory leak
+ */
+char *byte_to_emoji(uint8_t byte);
 
 /**
  * -------------------------------------------------------------------------------------------- ///
@@ -2656,7 +2740,6 @@ void transport_config_destroy(TariTransportConfig *transport);
  * `database_path` - The database path char array pointer which. This is the folder path where the
  * database files will be created and the application has write access to
  * `discovery_timeout_in_secs`: specify how long the Discovery Timeout for the wallet is.
- * `network`: name of network to connect to. Valid values are: esmeralda, dibbler, igor, localnet, mainnet, stagenet
  * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null. Functions
  * as an out parameter.
  *
@@ -2932,9 +3015,9 @@ TariBalance *wallet_get_balance(struct TariWallet *wallet,
  * * `page_size` - A number of items per page,
  * * `sorting` - An enum representing desired sorting,
  * * `dust_threshold` - A value filtering threshold. Outputs whose values are <= `dust_threshold` are not listed in the
- * result.
+ *   result.
  * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
- * Functions as an out parameter.
+ *   Functions as an out parameter.
  *
  * ## Returns
  * `*mut TariVector` - Returns a struct with an array pointer, length and capacity (needed for proper destruction
@@ -2959,11 +3042,11 @@ struct TariVector *wallet_get_utxos(struct TariWallet *wallet,
  * ## Arguments
  * * `wallet` - The TariWallet pointer,
  * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
- * Functions as an out parameter.
+ *   Functions as an out parameter.
  *
  * ## Returns
  * `*mut TariVector` - Returns a struct with an array pointer, length and capacity (needed for proper destruction
- * after use).
+ *     after use).
  *
  * ## States
  * 0 - Unspent
@@ -2997,7 +3080,7 @@ struct TariVector *wallet_get_all_utxos(struct TariWallet *wallet,
  * * `number_of_splits` - The number of times to split the amount
  * * `fee_per_gram` - The transaction fee
  * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
- * Functions as an out parameter.
+ *   Functions as an out parameter.
  *
  * ## Returns
  * `c_ulonglong` - Returns the transaction id.
@@ -3021,7 +3104,7 @@ uint64_t wallet_coin_split(struct TariWallet *wallet,
  *   (see `Commitment::to_hex()`)
  * * `fee_per_gram` - The transaction fee
  * * `error_out` - Pointer to an int which will be modified to an error code should one occur, may not be null.
- * Functions as an out parameter.
+ *   Functions as an out parameter.
  *
  * ## Returns
  * `TariVector` - Returns the transaction id.

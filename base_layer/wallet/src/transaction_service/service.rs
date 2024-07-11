@@ -38,7 +38,7 @@ use tari_common_types::{
     burnt_proof::BurntProof,
     tari_address::{TariAddress, TariAddressFeatures},
     transaction::{ImportStatus, TransactionDirection, TransactionStatus, TxId},
-    types::{ComAndPubSignature, FixedHash, PrivateKey, PublicKey, Signature},
+    types::{CommitmentFactory, FixedHash, PrivateKey, PublicKey, Signature},
 };
 use tari_comms::{types::CommsPublicKey, NodeIdentity};
 use tari_comms_dht::outbound::OutboundMessageRequester;
@@ -78,11 +78,21 @@ use tari_core::{
 };
 use tari_crypto::{
     keys::{PublicKey as PKtrait, SecretKey},
+    ristretto::pedersen::PedersenCommitment,
     tari_utilities::ByteArray,
 };
 use tari_key_manager::key_manager_service::KeyId;
 use tari_p2p::domain_message::DomainMessage;
-use tari_script::{inputs, push_pubkey_script, script, slice_to_boxed_message, ExecutionStack, TariScript};
+use tari_script::{
+    inputs,
+    push_pubkey_script,
+    script,
+    slice_to_boxed_message,
+    CheckSigSchnorrSignature,
+    ExecutionStack,
+    ScriptContext,
+    TariScript,
+};
 use tari_service_framework::{reply_channel, reply_channel::Receiver};
 use tari_shutdown::ShutdownSignal;
 use tokio::{
@@ -712,8 +722,8 @@ where
             TransactionServiceRequest::EncumberAggregateUtxo {
                 fee_per_gram,
                 output_hash,
+                expected_commitment,
                 script_input_shares,
-                script_public_key_shares,
                 script_signature_public_nonces,
                 sender_offset_public_key_shares,
                 metadata_ephemeral_public_key_shares,
@@ -723,8 +733,8 @@ where
                 .encumber_aggregate_tx(
                     fee_per_gram,
                     output_hash,
+                    expected_commitment,
                     script_input_shares,
-                    script_public_key_shares,
                     script_signature_public_nonces,
                     sender_offset_public_key_shares,
                     metadata_ephemeral_public_key_shares,
@@ -732,13 +742,17 @@ where
                     recipient_address,
                 )
                 .await
-                .map(|(tx_id, tx, total_script_pubkey)| {
-                    TransactionServiceResponse::EncumberAggregateUtxo(
-                        tx_id,
-                        Box::new(tx),
-                        Box::new(total_script_pubkey),
-                    )
-                }),
+                .map(
+                    |(tx_id, tx, total_script_pubkey, total_metadata_ephemeral_public_key, total_script_nonce)| {
+                        TransactionServiceResponse::EncumberAggregateUtxo(
+                            tx_id,
+                            Box::new(tx),
+                            Box::new(total_script_pubkey),
+                            Box::new(total_metadata_ephemeral_public_key),
+                            Box::new(total_script_nonce),
+                        )
+                    },
+                ),
             TransactionServiceRequest::FinalizeSentAggregateTransaction {
                 tx_id,
                 total_meta_data_signature,
@@ -952,9 +966,8 @@ where
 
         // If the individual handlers did not already send the API response then do it here.
         if let Some(rp) = reply_channel {
-            let _result = rp.send(response).map_err(|e| {
+            let _result = rp.send(response).inspect_err(|_| {
                 warn!(target: LOG_TARGET, "Failed to send reply");
-                e
             });
         }
         Ok(())
@@ -1031,10 +1044,7 @@ where
         if let OutputManagerEvent::TxoValidationSuccess(_) = (*event).clone() {
             let db = self.db.clone();
             let output_manager_handle = self.resources.output_manager_service.clone();
-            let metadata = match self.wallet_db.get_chain_metadata() {
-                Ok(data) => data,
-                Err(_) => None,
-            };
+            let metadata = self.wallet_db.get_chain_metadata().unwrap_or_default();
             let tip_height = match metadata {
                 Some(val) => val.best_block_height(),
                 None => 0u64,
@@ -1075,9 +1085,8 @@ where
         if destination.network() != self.resources.wallet_identity.address.network() {
             let _result = reply_channel
                 .send(Err(TransactionServiceError::InvalidNetwork))
-                .map_err(|e| {
+                .inspect_err(|_| {
                     warn!(target: LOG_TARGET, "Failed to send service reply");
-                    e
                 });
             return Err(TransactionServiceError::InvalidNetwork);
         }
@@ -1121,9 +1130,8 @@ where
 
             let _result = reply_channel
                 .send(Ok(TransactionServiceResponse::TransactionSent(tx_id)))
-                .map_err(|e| {
+                .inspect_err(|_| {
                     warn!(target: LOG_TARGET, "Failed to send service reply");
-                    e
                 });
 
             return Ok(());
@@ -1368,18 +1376,19 @@ where
     }
 
     /// Creates an encumbered uninitialized transaction
+    #[allow(clippy::mutable_key_type)]
     pub async fn encumber_aggregate_tx(
         &mut self,
         fee_per_gram: MicroMinotari,
         output_hash: String,
-        script_input_shares: Vec<Signature>,
-        script_public_key_shares: Vec<PublicKey>,
+        expected_commitment: PedersenCommitment,
+        script_input_shares: HashMap<PublicKey, CheckSigSchnorrSignature>,
         script_signature_public_nonces: Vec<PublicKey>,
         sender_offset_public_key_shares: Vec<PublicKey>,
         metadata_ephemeral_public_key_shares: Vec<PublicKey>,
         dh_shared_secret_shares: Vec<PublicKey>,
         recipient_address: TariAddress,
-    ) -> Result<(TxId, Transaction, PublicKey), TransactionServiceError> {
+    ) -> Result<(TxId, Transaction, PublicKey, PublicKey, PublicKey), TransactionServiceError> {
         let tx_id = TxId::new_random();
 
         match self
@@ -1389,37 +1398,50 @@ where
                 tx_id,
                 fee_per_gram,
                 output_hash,
+                expected_commitment,
                 script_input_shares,
-                script_public_key_shares,
                 script_signature_public_nonces,
                 sender_offset_public_key_shares,
                 metadata_ephemeral_public_key_shares,
                 dh_shared_secret_shares,
-                recipient_address,
+                recipient_address.clone(),
             )
             .await
         {
-            Ok((transaction, amount, fee, total_script_key)) => {
+            Ok((
+                transaction,
+                amount,
+                fee,
+                total_script_key,
+                total_metadata_ephemeral_public_key,
+                total_script_nonce,
+            )) => {
                 let completed_tx = CompletedTransaction::new(
                     tx_id,
                     self.resources.wallet_identity.address.clone(),
-                    self.resources.wallet_identity.address.clone(),
+                    recipient_address,
                     amount,
                     fee,
                     transaction.clone(),
-                    TransactionStatus::Completed,
+                    TransactionStatus::Pending,
                     "claimed n-of-m utxo".to_string(),
                     Utc::now().naive_utc(),
-                    TransactionDirection::Inbound,
+                    TransactionDirection::Outbound,
                     None,
                     None,
                     None,
                 )
                 .map_err(|e| TransactionServiceProtocolError::new(tx_id, e.into()))?;
                 self.db.insert_completed_transaction(tx_id, completed_tx)?;
-                Ok((tx_id, transaction, total_script_key))
+                Ok((
+                    tx_id,
+                    transaction,
+                    total_script_key,
+                    total_metadata_ephemeral_public_key,
+                    total_script_nonce,
+                ))
             },
-            Err(_) => Err(TransactionServiceError::UnexpectedApiResponse),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -1436,50 +1458,51 @@ where
     ) -> Result<TxId, TransactionServiceError> {
         let mut transaction = self.db.get_completed_transaction(tx_id)?;
 
+        // Add the aggregate signature components
         transaction.transaction.script_offset = &transaction.transaction.script_offset + &script_offset;
 
         transaction.transaction.body.update_metadata_signature(
-            &transaction.transaction.body.outputs()[0].commitment.clone(),
-            ComAndPubSignature::new(
-                transaction.transaction.body.outputs()[0]
-                    .metadata_signature
-                    .ephemeral_commitment()
-                    .clone(),
-                transaction.transaction.body.outputs()[0]
-                    .metadata_signature
-                    .ephemeral_pubkey()
-                    .clone(),
-                transaction.transaction.body.outputs()[0]
-                    .metadata_signature
-                    .u_a()
-                    .clone(),
-                transaction.transaction.body.outputs()[0]
-                    .metadata_signature
-                    .u_x()
-                    .clone(),
-                transaction.transaction.body.outputs()[0].metadata_signature.u_y() +
-                    total_meta_data_signature.get_signature(),
-            ),
+            &(transaction.transaction.body.outputs()[0].commitment.clone()),
+            &transaction.transaction.body.outputs()[0].metadata_signature + &total_meta_data_signature,
         )?;
 
         transaction.transaction.body.update_script_signature(
-            &transaction.transaction.body.inputs()[0].commitment()?.clone(),
-            &ComAndPubSignature::new(
-                transaction.transaction.body.inputs()[0]
-                    .script_signature
-                    .ephemeral_commitment()
-                    .clone(),
-                transaction.transaction.body.inputs()[0]
-                    .script_signature
-                    .ephemeral_pubkey()
-                    .clone(),
-                transaction.transaction.body.inputs()[0].script_signature.u_a().clone(),
-                transaction.transaction.body.inputs()[0].script_signature.u_x().clone(),
-                transaction.transaction.body.inputs()[0].script_signature.u_y() +
-                    total_script_data_signature.get_signature(),
-            ),
+            &(transaction.transaction.body.inputs()[0].commitment()?.clone()),
+            &transaction.transaction.body.inputs()[0].script_signature + &total_script_data_signature,
         )?;
 
+        // Validate the aggregate signatures and script offset
+        let factory = CommitmentFactory::default();
+        let mut input_keys = PublicKey::default();
+        for input in transaction.transaction.body.inputs() {
+            let context = ScriptContext::new(
+                self.last_seen_tip_height.unwrap_or(0),
+                &[0; 32],
+                input
+                    .commitment()
+                    .map_err(|e| TransactionServiceError::ServiceError(format!("TxId: {}, {}", tx_id, e)))?,
+            );
+            input_keys = input_keys +
+                input
+                    .run_and_verify_script(&factory, Some(context))
+                    .map_err(|e| TransactionServiceError::ServiceError(format!("TxId: {}, {}", tx_id, e)))?;
+        }
+        let mut output_keys = PublicKey::default();
+        for output in transaction.transaction.body.outputs() {
+            output
+                .verify_metadata_signature()
+                .map_err(|e| TransactionServiceError::ServiceError(format!("TxId: {}, {}", tx_id, e)))?;
+            output_keys = output_keys + output.sender_offset_public_key.clone();
+        }
+        let lhs = input_keys - output_keys;
+        if lhs != PublicKey::from_secret_key(&transaction.transaction.script_offset) {
+            return Err(TransactionServiceError::ServiceError(format!(
+                "Invalid script offset (TxId: {})",
+                tx_id
+            )));
+        }
+
+        // Update the wallet database
         let _res = self
             .resources
             .output_manager_service
