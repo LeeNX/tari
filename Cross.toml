@@ -89,7 +89,7 @@ passthrough = [
 #  "RISCV64GC_UNKNOWN_LINUX_GNU_OPENSSL_NO_VENDOR=true",
   "RISCV64GC_UNKNOWN_LINUX_GNU_OPENSSL_INCLUDE_DIR=/usr/include/riscv64-linux-gnu/openssl/",
   "RISCV64GC_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/riscv64-linux-gnu/",
-  "RUSTFLAGS=-L /usr/riscv64-linux-gnu/lib/ -L /usr/lib/riscv64-linux-gnu/"
+  "RUSTFLAGS=-L /usr/riscv64-linux-gnu/lib/ -L /usr/lib/riscv64-linux-gnu/",
   "PKG_CONFIG_SYSROOT_DIR=/usr/lib/riscv64-linux-gnu/pkgconfig",
   "PKG_CONFIG_ALLOW_CROSS=true",
 ]
