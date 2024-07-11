@@ -7,6 +7,8 @@ set -e
 
 printenv
 rustup show
+rustup --verbose update
+
 
 if [ "${TARGETARCH}" = "arm64" ] ; then
   platform_env=aarch64
