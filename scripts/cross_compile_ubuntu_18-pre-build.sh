@@ -5,6 +5,9 @@
 
 set -e
 
+# APT Proxy for quicker testing
+#export http_proxy=http://apt-proxy.local:3142
+
 USAGE="Usage: $0 {target build}
  where target build is one of the following:
   x86_64-unknown-linux-gnu or
@@ -162,24 +165,31 @@ deb [arch=amd64] http://security.ubuntu.com/ubuntu/ ${ubuntu_tag}-security multi
 EoF
   fi
 
+  dpkg --print-architecture
   dpkg --add-architecture ${CROSS_DEB_ARCH}
+  dpkg --print-architecture
   apt-get update
 
   # scripts/install_ubuntu_dependencies-cross_compile.sh x86-64
+#    pkg-config-${targetPlatform}-linux-gnu \
   apt-get --assume-yes install \
-    pkg-config-${targetPlatform}-linux-gnu \
     gcc-${targetPlatform}-linux-gnu \
     g++-${targetPlatform}-linux-gnu
 
   # packages needed for Ledger and hidapi
   apt-get --assume-yes install \
     libudev-dev:${CROSS_DEB_ARCH} \
-    libhidapi-dev:${CROSS_DEB_ARCH}
+    libhidapi-dev:${CROSS_DEB_ARCH} \
+    libssl-dev:${CROSS_DEB_ARCH}
 
 fi
+
+rustup show
 
 rustup target add ${targetBuild}
 rustup toolchain install stable-${targetBuild} --force-non-host
 
 rustup target list --installed
 rustup toolchain list
+
+rustup show
