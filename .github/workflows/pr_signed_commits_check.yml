@@ -1,3 +1,4 @@
+# checks the PR for signed commits
 ---
 name: PR - Signed commits check
 
